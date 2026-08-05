@@ -5,6 +5,10 @@ version = 4
 [[package]]
 name = "SerialPortUtil"
 version = "0.1.0"
+dependencies = [
+ "ww-protocol",
+ "ww-ui",
+]
 
 [[package]]
 name = "accesskit"

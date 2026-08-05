@@ -13,3 +13,8 @@ members = ["crates/ww-ui", "crates/ww-protocol"]
 [workspace.dependencies]
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "wayland", "x11"] }
+
+
+[dependencies]
+ww-ui = {path = "crates/ww-ui"}
+ww-protocol = {path = "crates/ww-protocol"}

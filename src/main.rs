@@ -1,3 +1,4 @@
+
 fn main() {
-    println!("Hello, world!");
+    ww_ui::run();
 }

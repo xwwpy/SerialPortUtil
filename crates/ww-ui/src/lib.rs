@@ -29,7 +29,7 @@ impl Focusable for App {
 }
 
 impl Render for App {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .flex()
@@ -66,7 +66,7 @@ pub fn run() {
         };
 
         let window_handle = cx
-            .open_window(options, |window, cx| cx.new(|cx| App::new(cx)))
+            .open_window(options, |_window, cx| cx.new(|cx| App::new(cx)))
             .unwrap();
 
         window_handle

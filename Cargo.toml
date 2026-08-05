@@ -1,0 +1,15 @@
+[package]
+name = "SerialPortUtil"
+version = "0.1.0"
+edition = "2024"
+
+
+[workspace.lints]
+
+
+[workspace]
+members = ["crates/ww-ui", "crates/ww-protocol"]
+
+[workspace.dependencies]
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "wayland", "x11"] }

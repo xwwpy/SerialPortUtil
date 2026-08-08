@@ -1,4 +1,6 @@
 pub mod color;
+pub mod error;
+pub mod log;
 
 use gpui::{Length, Size};
 

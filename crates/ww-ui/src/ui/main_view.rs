@@ -1,3 +1,4 @@
+use crate::ui::info::Info;
 use crate::ui::title_bar::TitleBar;
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -8,6 +9,7 @@ use gpui::{
 pub struct MainView {
     focus_handle: FocusHandle,
     title_bar: Entity<TitleBar>,
+    info: Entity<Info>,
 }
 
 impl MainView {
@@ -15,6 +17,7 @@ impl MainView {
         Self {
             focus_handle: cx.focus_handle(),
             title_bar: cx.new(|cx| TitleBar::new(cx)),
+            info: cx.new(|cx| Info::new(cx)),
         }
     }
 }
@@ -68,7 +71,7 @@ impl Render for MainView {
                     .border_color(blue())
                     .border_1()
                     .rounded_md()
-                    .child("info"),
+                    .child(self.info.clone()),
             )
     }
 }

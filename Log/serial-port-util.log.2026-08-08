@@ -1,0 +1,101 @@
+2026-08-08T21:20:14.529759Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:20:14.540394Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:20:14.691116Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:20:14.699129Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:34:27.296453Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:34:27.306174Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:34:27.437838Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:34:27.444804Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:34:27.512162Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,400
+2026-08-08T21:34:27.699820Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:34:27.699909Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T21:39:45.667871Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:39:45.678139Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:39:45.806862Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:39:45.814609Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:39:45.881924Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,400
+2026-08-08T21:39:46.069521Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:39:46.069640Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T21:42:21.535305Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:42:21.545295Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:42:21.677742Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:42:21.685343Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:42:21.751057Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T21:42:21.938876Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:42:21.938965Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T21:43:21.102151Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:43:21.111787Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:43:21.243084Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:43:21.250739Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:43:21.316749Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T21:43:21.505957Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:43:21.506057Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T21:47:30.151006Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:47:30.159774Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:47:30.290390Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:47:30.298693Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:47:30.365046Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T21:47:30.552659Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:47:30.552823Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T21:48:25.320660Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:48:25.330326Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:48:25.458886Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:48:25.466275Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:48:25.532282Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T21:48:25.718960Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:48:25.719090Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T21:49:38.004756Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:49:38.013953Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:49:38.143933Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:49:38.150737Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:49:38.216981Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T21:49:38.403325Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:49:38.403418Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T21:52:41.987361Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T21:52:41.996423Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T21:52:42.127344Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T21:52:42.135082Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T21:52:42.200837Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T21:52:42.384954Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T21:52:42.385057Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T22:22:29.752741Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:22:29.764233Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:22:29.904793Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:22:29.923359Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T22:22:29.991427Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T22:22:30.183452Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T22:22:30.183571Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T22:27:23.903694Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:27:23.913813Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:27:24.045586Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:27:24.052712Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T22:27:24.118610Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T22:27:24.305583Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T22:27:24.305682Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T22:29:28.804716Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:29:28.832336Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:29:28.965822Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:29:28.973285Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T22:29:29.039957Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置窗口大小，使用默认值1200,700
+2026-08-08T22:29:29.227676Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者名称，使用默认值：ww
+2026-08-08T22:29:29.227763Z  INFO ThreadId(01) ww_ui::ui_config: 没有配置作者邮箱，使用默认值：example@email
+2026-08-08T22:36:24.008572Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:36:24.018588Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:36:24.148801Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:36:24.156804Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T22:38:35.501715Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:38:35.510876Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:38:35.643967Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:38:35.651204Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T22:39:16.386099Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:39:16.396356Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:39:16.528408Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:39:16.535647Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T22:43:49.121962Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:43:49.131244Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:43:49.263067Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:43:49.270461Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.
+2026-08-08T22:45:01.740952Z  INFO ThreadId(01) ww_ui: Starting WW UI ...
+2026-08-08T22:45:01.751722Z  INFO ThreadId(01) gpui_windows::directx_devices: Using GPU: NVIDIA GeForce RTX 5070 Ti
+2026-08-08T22:45:01.890636Z  INFO ThreadId(01) gpui_windows::directx_devices: Created device with Direct3D 11.1 feature level.
+2026-08-08T22:45:01.898413Z  INFO ThreadId(01) gpui_windows::direct_write: Use Microsoft YaHei UI as UI font.

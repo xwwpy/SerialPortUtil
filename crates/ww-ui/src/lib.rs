@@ -1,7 +1,10 @@
 mod common;
 pub mod ui;
+mod ui_config;
 
-use crate::ui::main_view::MainView;
+use std::time::Instant;
+
+use crate::{common::log, ui::main_view::MainView, ui_config::get};
 
 use gpui::{
     AppContext, Bounds, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement,
@@ -41,8 +44,20 @@ impl Render for App {
 }
 
 pub fn run() {
+    let start = Instant::now();
+    log::init();
+    let config = get();
+
+    print_banner();
+    tracing::info!("Starting WW UI ...");
+
     gpui_platform::application().run(|cx| {
-        let bounds = Bounds::centered(None, size(px(1200.), px(600.)), cx);
+        let window_size = config.get_window_size();
+        let bounds = Bounds::centered(
+            None,
+            size(px(window_size.width), px(window_size.height)),
+            cx,
+        );
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: None,
@@ -73,4 +88,25 @@ pub fn run() {
             })
             .unwrap();
     });
+
+    let elapsed = start.elapsed();
+    tracing::info!("WW UI started in {:.2}s", elapsed.as_secs_f64());
+}
+
+fn print_banner() {
+    match std::fs::read_to_string("banner.txt") {
+        Ok(banner) => {
+            println!("\x1b[36m{banner}\x1b[0m");
+        }
+        Err(_) => {
+            println!("\x1b[31mFailed to load banner.txt\x1b[0m");
+        }
+    }
+    println!(
+        "\x1b[2m                                          v{}\x1b[0m",
+        env!("CARGO_PKG_VERSION")
+    );
+    println!(
+        "\x1b[36m                         \x1b[1mWW: SerialPortUtil\x1b[0m\x1b[36m  Ready to Connect\x1b[0m"
+    );
 }

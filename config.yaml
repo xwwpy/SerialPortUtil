@@ -1,0 +1,11 @@
+window_size:
+  width: 500
+  height: 500
+
+log_config:
+  log_dir: Log
+  log_level: info
+
+author_info:
+  author_name: ww
+  author_email: 000000@qq.com

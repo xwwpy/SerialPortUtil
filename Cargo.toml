@@ -11,9 +11,22 @@ edition = "2024"
 members = ["crates/ww-ui", "crates/ww-protocol"]
 
 [workspace.dependencies]
+tokio = {version = "*", features = ["full"]}
+tracing = {version = "*"}
+tracing-subscriber = {version = "*", features = ["env-filter", "json"] }
+tracing-appender = { version = "*" }
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "wayland", "x11"] }
+gpui-component = {git = "https://github.com/longbridge/gpui-component"}
+gpui-component-assets = {git = "https://github.com/longbridge/gpui-component"}
+config = {version = "*"}
+serde = {version = "*", features = ["derive"]}
+serde_json = {version = "*"}
+thiserror = {version = "*"}
+anyhow = {version = "*"}
 
 [dependencies]
 ww-ui = {path = "crates/ww-ui"}
 ww-protocol = {path = "crates/ww-protocol"}
+tokio.workspace = true
+anyhow.workspace = true

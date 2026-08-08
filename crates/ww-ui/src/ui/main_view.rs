@@ -1,14 +1,20 @@
+use crate::ui::title_bar::TitleBar;
 use gpui::prelude::FluentBuilder;
-use gpui::{App, Context, FocusHandle, Focusable, IntoElement, ParentElement, Render, Styled, Window, blue, div, rgb, InteractiveElement, px};
+use gpui::{
+    App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
+    ParentElement, Render, Styled, Window, blue, div, px, rgb,
+};
 
 pub struct MainView {
     focus_handle: FocusHandle,
+    title_bar: Entity<TitleBar>,
 }
 
 impl MainView {
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self {
             focus_handle: cx.focus_handle(),
+            title_bar: cx.new(|cx| TitleBar::new(cx)),
         }
     }
 }
@@ -24,6 +30,7 @@ impl Render for MainView {
             .gap_1()
             .child(
                 div()
+                    .id("TitleBar")
                     .w_full()
                     .flex()
                     .flex_grow(0.)
@@ -32,7 +39,7 @@ impl Render for MainView {
                     .border_color(blue())
                     .border_1()
                     .rounded_md()
-                    .child("title bar"),
+                    .child(self.title_bar.clone()),
             )
             .child(
                 div()

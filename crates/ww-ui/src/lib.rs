@@ -1,11 +1,12 @@
+mod common;
 pub mod ui;
 
 use crate::ui::main_view::MainView;
 
 use gpui::{
     AppContext, Bounds, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement,
-    Render, Styled, TitlebarOptions, Window, WindowBackgroundAppearance, WindowBounds, WindowKind,
-    WindowOptions, div, px, size,
+    Render, Styled, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
+    div, px, size,
 };
 
 struct App {
@@ -44,11 +45,7 @@ pub fn run() {
         let bounds = Bounds::centered(None, size(px(1200.), px(600.)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: Some(TitlebarOptions {
-                title: Some("SerialPortUtil".into()),
-                appears_transparent: false,
-                traffic_light_position: None,
-            }),
+            titlebar: None,
             focus: true,
             show: true,
             kind: WindowKind::Normal,

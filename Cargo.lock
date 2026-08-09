@@ -3,16 +3,6 @@
 version = 4
 
 [[package]]
-name = "SerialPortUtil"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "tokio",
- "ww-protocol",
- "ww-ui",
-]
-
-[[package]]
 name = "accesskit"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6113,6 +6103,16 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serial_port_util"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tokio",
+ "ww-protocol",
+ "ww-ui",
 ]
 
 [[package]]

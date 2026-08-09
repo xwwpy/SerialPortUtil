@@ -1,3 +1,4 @@
+mod assets;
 mod common;
 pub mod ui;
 mod ui_config;
@@ -11,6 +12,7 @@ use gpui::{
     Render, Styled, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
     div, px, size,
 };
+use gpui_component::Root;
 
 struct App {
     focus: FocusHandle,
@@ -50,44 +52,49 @@ pub fn run() {
 
     print_banner();
     tracing::info!("Starting WW UI ...");
+    gpui_platform::application()
+        .with_assets(assets::AppAssets::new("assets"))
+        .run(|cx| {
+            gpui_component::init(cx);
 
-    gpui_platform::application().run(|cx| {
-        let window_size = config.get_window_size();
-        let bounds = Bounds::centered(
-            None,
-            size(px(window_size.width), px(window_size.height)),
-            cx,
-        );
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: None,
-            focus: true,
-            show: true,
-            kind: WindowKind::Normal,
-            is_movable: true,
-            app_owns_titlebar_drag: true,
-            is_resizable: true,
-            is_minimizable: true,
-            display_id: None,
-            window_background: WindowBackgroundAppearance::Opaque,
-            app_id: Some("SerialPortUi".to_string()),
-            window_min_size: None,
-            window_decorations: None,
-            icon: None,
-            tabbing_identifier: Some("SerialPortUi".to_string()),
-        };
+            let window_size = config.get_window_size();
+            let bounds = Bounds::centered(
+                None,
+                size(px(window_size.width), px(window_size.height)),
+                cx,
+            );
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                titlebar: None,
+                focus: true,
+                show: true,
+                kind: WindowKind::Normal,
+                is_movable: true,
+                app_owns_titlebar_drag: true,
+                is_resizable: true,
+                is_minimizable: true,
+                display_id: None,
+                window_background: WindowBackgroundAppearance::Opaque,
+                app_id: Some("SerialPortUi".to_string()),
+                window_min_size: None,
+                window_decorations: None,
+                icon: None,
+                tabbing_identifier: Some("SerialPortUi".to_string()),
+            };
 
-        let window_handle = cx
-            .open_window(options, |_window, cx| cx.new(|cx| App::new(cx)))
-            .unwrap();
+            let window_handle = cx
+                .open_window(options, |window, cx| {
+                    let view = cx.new(|cx| App::new(cx));
+                    cx.new(|cx| Root::new(view, window, cx))
+                })
+                .unwrap();
 
-        window_handle
-            .update(cx, |view, window, cx| {
-                window.activate_window();
-                window.focus(&view.focus_handle(cx), cx);
-            })
-            .unwrap();
-    });
+            window_handle
+                .update(cx, |_view, window, _cx| {
+                    window.activate_window();
+                })
+                .unwrap();
+        });
 
     let elapsed = start.elapsed();
     tracing::info!("WW UI started in {:.2}s", elapsed.as_secs_f64());

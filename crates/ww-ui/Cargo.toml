@@ -16,7 +16,8 @@ serde = {workspace = true}
 serde_json = {workspace = true}
 thiserror = {workspace = true}
 anyhow = {workspace = true}
-tokio = {workspace = true}
+tokio = {workspace = true, features = ["full"]}
 tracing = {workspace = true}
 tracing-subscriber = {workspace = true}
 tracing-appender = {workspace = true}
+ww-protocol = {path = "../ww-protocol"}

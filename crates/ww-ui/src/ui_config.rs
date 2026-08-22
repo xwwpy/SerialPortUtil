@@ -9,6 +9,20 @@ use crate::common::error::UIError;
 static UI_CONFIG: OnceLock<UIConfig> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PortPanelConfig {
+    port_update_interval: Option<u64>,
+}
+
+impl PortPanelConfig {
+    pub fn get_port_update_interval(&self) -> u64 {
+        self.port_update_interval.unwrap_or_else(|| {
+            tracing::info!("没有配置端口更新间隔，使用默认值：1");
+            1
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub struct LogConfig {
     log_dir: Option<String>,
@@ -60,6 +74,7 @@ pub struct UIConfig {
     window_size: Option<Size<f32>>,
     log_config: LogConfig,
     author_info: AuthorInfoConfig,
+    port_panel_config: PortPanelConfig,
 }
 
 impl UIConfig {
@@ -74,6 +89,10 @@ impl UIConfig {
     }
     pub fn get_author_info(&self) -> &AuthorInfoConfig {
         &self.author_info
+    }
+
+    pub fn get_port_panel_config(&self) -> &PortPanelConfig {
+        &self.port_panel_config
     }
 }
 

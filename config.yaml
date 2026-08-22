@@ -1,6 +1,6 @@
 window_size:
-  width: 500
-  height: 500
+  width: 1200
+  height: 700
 
 log_config:
   log_dir: Log
@@ -9,3 +9,6 @@ log_config:
 author_info:
   author_name: ww
   author_email: 000000@qq.com
+
+port_panel_config:
+  port_update_interval: 1

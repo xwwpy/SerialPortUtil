@@ -20,10 +20,10 @@ struct App {
 }
 
 impl App {
-    fn new(cx: &mut Context<Self>) -> Self {
+    fn new(cx: &mut Context<Self>, window: &mut gpui::Window) -> Self {
         Self {
             focus: cx.focus_handle(),
-            main_view: cx.new(|cx| MainView::new(cx)),
+            main_view: cx.new(|cx| MainView::new(cx, window)),
         }
     }
 }
@@ -84,7 +84,7 @@ pub fn run() {
 
             let window_handle = cx
                 .open_window(options, |window, cx| {
-                    let view = cx.new(|cx| App::new(cx));
+                    let view = cx.new(|cx| App::new(cx, window));
                     cx.new(|cx| Root::new(view, window, cx))
                 })
                 .unwrap();

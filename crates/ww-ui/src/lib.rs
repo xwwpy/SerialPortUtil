@@ -97,7 +97,7 @@ pub fn run() {
         });
 
     let elapsed = start.elapsed();
-    tracing::info!("WW UI started in {:.2}s", elapsed.as_secs_f64());
+    tracing::info!("WW UI run for {:.2}s", elapsed.as_secs_f64());
 }
 
 fn print_banner() {

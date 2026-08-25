@@ -1,8 +1,10 @@
 pub mod common;
 pub mod model;
 
+pub use serialport::SerialPort;
 pub use serialport::SerialPortInfo;
 pub use serialport::SerialPortType;
+pub use serialport::{DataBits, Parity, StopBits};
 
 use serialport::available_ports;
 

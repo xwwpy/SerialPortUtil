@@ -1,6 +1,9 @@
+use gpui::{AsyncApp, WeakEntity};
 use gpui_component::select::SelectItem;
 use serde::{Deserialize, Serialize};
-use ww_protocol::{SerialPortInfo, SerialPortType};
+use ww_protocol::{DataBits, Parity, SerialPort, SerialPortInfo, SerialPortType, StopBits};
+
+use crate::ui::port_panel::PortPanel;
 
 #[derive(Debug, Clone)]
 pub struct PortInfoItem {
@@ -79,4 +82,110 @@ impl SelectItem for BaudRateItem {
     fn value(&self) -> &Self::Value {
         &self.value
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParityItem {
+    None,
+    Odd,
+    Even,
+}
+
+impl Into<Parity> for ParityItem {
+    fn into(self) -> Parity {
+        match self {
+            Self::None => Parity::None,
+            Self::Odd => Parity::Odd,
+            Self::Even => Parity::Even,
+        }
+    }
+}
+
+impl SelectItem for ParityItem {
+    type Value = Self;
+
+    fn title(&self) -> gpui::SharedString {
+        match self {
+            Self::None => "None".into(),
+            Self::Odd => "Odd".into(),
+            Self::Even => "Even".into(),
+        }
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DataBitsItem {
+    Five,
+    Six,
+    Seven,
+    Eight,
+}
+
+impl SelectItem for DataBitsItem {
+    type Value = Self;
+
+    fn title(&self) -> gpui::SharedString {
+        match self {
+            Self::Five => "5".into(),
+            Self::Six => "6".into(),
+            Self::Seven => "7".into(),
+            Self::Eight => "8".into(),
+        }
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self
+    }
+}
+
+impl Into<DataBits> for DataBitsItem {
+    fn into(self) -> DataBits {
+        match self {
+            Self::Five => DataBits::Five,
+            Self::Six => DataBits::Six,
+            Self::Seven => DataBits::Seven,
+            Self::Eight => DataBits::Eight,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StopBitsItem {
+    One,
+    Two,
+}
+
+impl Into<StopBits> for StopBitsItem {
+    fn into(self) -> StopBits {
+        match self {
+            Self::One => StopBits::One,
+            Self::Two => StopBits::Two,
+        }
+    }
+}
+
+impl SelectItem for StopBitsItem {
+    type Value = Self;
+
+    fn title(&self) -> gpui::SharedString {
+        match self {
+            Self::One => "1".into(),
+            Self::Two => "2".into(),
+        }
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self
+    }
+}
+
+pub async fn port_task(
+    _port_handle: Box<dyn SerialPort>,
+    _port_panel: WeakEntity<PortPanel>,
+    _cx: &mut AsyncApp,
+) {
 }

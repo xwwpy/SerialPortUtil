@@ -8,4 +8,6 @@ pub enum ProtocolError {
     ToUpdateError(Cow<'static, str>),
     #[error("设备{0}未找到")]
     NotFoundPortError(Cow<'static, str>),
+    #[error("打开端口失败: {0}")]
+    OpenPortError(Cow<'static, str>),
 }

@@ -14,6 +14,8 @@ pub struct PortPanelConfig {
     port_update_interval: Option<u64>,
     default_baud_rate: Option<u32>,
     baud_rate_default_vec: Option<Vec<BaudRateItem>>,
+    // 串口读取超时时间，单位毫秒
+    read_timeout: Option<u64>,
 }
 
 impl PortPanelConfig {
@@ -28,6 +30,13 @@ impl PortPanelConfig {
         self.default_baud_rate.unwrap_or_else(|| {
             tracing::info!("没有配置默认波特率，使用默认值：115200");
             115200
+        })
+    }
+
+    pub fn get_read_timeout_timeout(&self) -> u64 {
+        self.read_timeout.unwrap_or_else(|| {
+            tracing::info!("没有配置打开串口超时时间，使用默认值：1000");
+            1000
         })
     }
 

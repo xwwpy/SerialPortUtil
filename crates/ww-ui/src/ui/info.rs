@@ -1,9 +1,7 @@
-use gpui::{Context, ParentElement, Render, SharedString, Styled, div};
+use gpui::{Context, ParentElement, Render, SharedString, Styled, black, div};
+use gpui_component::gray;
 
-use crate::{
-    common::color::{black, grey_with_alpha},
-    ui_config::get,
-};
+use crate::ui_config::get;
 
 pub struct Info {
     auther_info: SharedString,
@@ -32,7 +30,7 @@ impl Render for Info {
             .gap_2()
             .border_1()
             .border_color(black())
-            .bg(grey_with_alpha(0.4, 0.2))
+            .bg(gray(50))
             .rounded_md()
             .items_center()
             .justify_center()

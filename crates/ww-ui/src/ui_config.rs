@@ -5,12 +5,15 @@ use gpui::{Size, size};
 use serde::{Deserialize, Serialize};
 
 use crate::common::error::UIError;
+use crate::model::port_model::BaudRateItem;
 
 static UI_CONFIG: OnceLock<UIConfig> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PortPanelConfig {
     port_update_interval: Option<u64>,
+    default_baud_rate: Option<u32>,
+    baud_rate_default_vec: Option<Vec<BaudRateItem>>,
 }
 
 impl PortPanelConfig {
@@ -19,6 +22,17 @@ impl PortPanelConfig {
             tracing::info!("没有配置端口更新间隔，使用默认值：1");
             1
         })
+    }
+
+    pub fn get_default_baud_rate(&self) -> u32 {
+        self.default_baud_rate.unwrap_or_else(|| {
+            tracing::info!("没有配置默认波特率，使用默认值：115200");
+            115200
+        })
+    }
+
+    pub fn get_baud_rate_default_vec(&self) -> Vec<BaudRateItem> {
+        self.baud_rate_default_vec.as_ref().unwrap().clone()
     }
 }
 

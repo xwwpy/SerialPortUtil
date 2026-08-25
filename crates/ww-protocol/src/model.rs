@@ -13,7 +13,7 @@ impl Ports {
     pub fn new() -> Self {
         Self {
             current_select_port: None,
-            ports: None,
+            ports: Some(vec![]),
         }
     }
 

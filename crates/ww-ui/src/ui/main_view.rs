@@ -1,18 +1,19 @@
 use std::time::Duration;
 
+use crate::event::UpdatePortsInfo;
 use crate::ui::info::Info;
 use crate::ui::port_panel::PortPanel;
 use crate::ui::title_bar::TitleBar;
 use crate::ui_config;
+
 use gpui::prelude::FluentBuilder;
 use gpui::{
     App, AppContext, AsyncApp, Context, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement, IntoElement, ParentElement, Render, Styled, WeakEntity, Window, blue, div,
     px, rgb,
 };
-use ww_protocol::{SerialPortInfo, get_ports};
 
-impl EventEmitter<Vec<SerialPortInfo>> for MainView {}
+impl EventEmitter<UpdatePortsInfo> for MainView {}
 
 pub struct MainView {
     focus_handle: FocusHandle,
@@ -27,8 +28,8 @@ impl MainView {
         let port_panel = cx.new(|cx| {
             let update_info_sub = cx.subscribe(
                 &main_view_entity,
-                |this: &mut PortPanel, _main_view, vec: &Vec<SerialPortInfo>, cx| {
-                    this.update_info(vec, cx);
+                |this: &mut PortPanel, _main_view, _event: &UpdatePortsInfo, cx| {
+                    this.update_info(cx);
                 },
             );
             PortPanel::new(window, cx, update_info_sub)
@@ -115,9 +116,8 @@ async fn update_ports_info(main_view_entity: WeakEntity<MainView>, cx: &mut Asyn
         .get_port_panel_config()
         .get_port_update_interval();
     loop {
-        let ports = get_ports();
         let emit_res = main_view_entity.update(cx, move |_, cx| {
-            cx.emit(ports);
+            cx.emit(UpdatePortsInfo {});
         });
         if let Err(e) = emit_res {
             tracing::error!("更新端口信息失败：{e}");

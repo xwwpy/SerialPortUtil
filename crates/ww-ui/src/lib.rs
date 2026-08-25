@@ -1,5 +1,7 @@
 mod assets;
 mod common;
+mod event;
+mod model;
 pub mod ui;
 mod ui_config;
 

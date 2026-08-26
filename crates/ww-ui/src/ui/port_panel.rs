@@ -1,17 +1,19 @@
+use crate::event::ReceivedData;
 use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, StopBitsItem, port_task,
 };
 use crate::ui_config;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
-    ParentElement, Render, Styled, Subscription, Task, TextOverflow, Window, blue, div, green, px,
-    white,
+    AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement, ParentElement, Render, Styled, Subscription, Task, Window, blue, div,
+    green, px, white,
 };
-use gpui_component::button::Button;
+use gpui_component::button::{Button, ButtonVariant};
+use gpui_component::dialog::DialogButtonProps;
 use gpui_component::label::Label;
 use gpui_component::select::{SearchableVec, Select, SelectState};
-use gpui_component::{Disableable, IndexPath, Sizable};
+use gpui_component::{Disableable, IndexPath, WindowExt};
 
 use ww_protocol::{get_ports, model::Ports};
 
@@ -37,6 +39,8 @@ impl Focusable for PortPanel {
         self.focus_handle.clone()
     }
 }
+
+impl EventEmitter<ReceivedData> for PortPanel {}
 
 impl PortPanel {
     pub fn new(
@@ -189,12 +193,28 @@ impl PortPanel {
         let _ = self.update_info_sub.take();
     }
 
-    pub fn open_port(&mut self, cx: &mut Context<Self>) {
+    pub fn open_port(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         // 更新选中的串口
         // 获取串口名
         let port_name = self.port_info_select.read(cx).selected_value();
         if port_name == None {
             // TODO 发送打开失败事件
+            window.open_alert_dialog(cx, |alert, _, _cx| {
+                alert
+                    .title("确定要关闭窗口？")
+                    .description("关闭窗口后会关闭已打开的串口的连接")
+                    .button_props(
+                        DialogButtonProps::default()
+                            .ok_variant(ButtonVariant::Danger) // 危险红色按钮
+                            .ok_text("关闭")
+                            .cancel_text("取消")
+                            .show_cancel(true),
+                    )
+                    .on_ok(|_, window, _cx| {
+                        window.remove_window();
+                        true
+                    })
+            });
             return;
         }
 
@@ -281,22 +301,23 @@ impl Render for PortPanel {
                     .rounded_md()
                     .bg(white())
                     .shadow_md()
-                    .child(Label::new(
-                        match self.port_info_select.read(cx).selected_value() {
-                            Some(port_name) => port_name.clone(),
+                    .child(
+                        Label::new(match self.port_info_select.read(cx).selected_value() {
+                            Some(port_name) => format!("当前串口: {}", port_name),
                             None => "未选择串口...".into(),
-                        },
-                    ))
+                        })
+                        .text_color(green()),
+                    )
                     .child(
                         div().child(
                             Button::new("open/close")
                                 .size(window.rem_size() * 2.)
                                 .flex_shrink_0()
-                                .on_click(cx.listener(|this, _event, _window, cx| {
+                                .on_click(cx.listener(|this, _event, window, cx| {
                                     if this.open_state {
                                         this.close_port(cx);
                                     } else {
-                                        this.open_port(cx);
+                                        this.open_port(cx, window);
                                     }
                                     cx.notify();
                                 }))

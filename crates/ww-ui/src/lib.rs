@@ -37,13 +37,23 @@ impl Focusable for App {
 }
 
 impl Render for App {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dialog_layer = Root::render_dialog_layer(window, cx);
+        let sheet_layer = Root::render_sheet_layer(window, cx);
+        let notification_layer = Root::render_notification_layer(window, cx);
+
         div()
             .size_full()
             .flex()
             .items_center()
             .justify_center()
             .child(self.main_view.clone())
+            // 渲染对话框层
+            .children(dialog_layer)
+            // 渲染侧边栏层
+            .children(sheet_layer)
+            // 渲染通知层
+            .children(notification_layer)
     }
 }
 

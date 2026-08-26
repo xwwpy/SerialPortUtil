@@ -8612,6 +8612,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "config",
+ "encoding_rs",
  "gpui",
  "gpui-component",
  "gpui-component-assets",

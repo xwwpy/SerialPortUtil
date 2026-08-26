@@ -36,12 +36,13 @@ impl MainView {
             );
             PortPanel::new(window, cx, update_info_sub)
         });
+        let port_panel_cloned = port_panel.clone();
         cx.spawn(update_ports_info).detach();
         Self {
             focus_handle: cx.focus_handle(),
             title_bar: cx.new(|cx| TitleBar::new(cx)),
             port_panel: port_panel,
-            io_panel: cx.new(|cx| IoPanel::new(cx)),
+            io_panel: cx.new(|cx| IoPanel::new(cx, port_panel_cloned)),
             info: cx.new(|cx| Info::new(cx)),
         }
     }

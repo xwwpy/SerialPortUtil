@@ -5,7 +5,7 @@ use gpui_component::select::SelectItem;
 use serde::{Deserialize, Serialize};
 use ww_protocol::{DataBits, Parity, SerialPort, SerialPortInfo, SerialPortType, StopBits};
 
-use crate::ui::port_panel::PortPanel;
+use crate::{event::ReceivedData, ui::port_panel::PortPanel};
 
 #[derive(Debug, Clone)]
 pub struct PortInfoItem {
@@ -187,15 +187,17 @@ impl SelectItem for StopBitsItem {
 
 pub async fn port_task(
     mut port_handle: Box<dyn SerialPort>,
-    _port_panel: WeakEntity<PortPanel>,
-    _cx: &mut AsyncApp,
+    port_panel: WeakEntity<PortPanel>,
+    cx: &mut AsyncApp,
 ) {
     let mut buf = [0u8; 1024];
     loop {
         let n = port_handle.read(&mut buf).unwrap_or(0);
         if n > 0 {
-            println!("{}", unsafe {
-                String::from_raw_parts(&mut buf as *mut u8, n, 1024)
+            let _ = port_panel.update(cx, |_this, cx| {
+                cx.emit(ReceivedData {
+                    data: buf[0..n].to_vec(),
+                });
             });
         }
         tokio::time::sleep(Duration::from_millis(10)).await;

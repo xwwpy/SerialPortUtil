@@ -5,7 +5,8 @@ use crate::ui_config;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
-    ParentElement, Render, Styled, Subscription, Task, Window, blue, div, green, px, white,
+    ParentElement, Render, Styled, Subscription, Task, TextOverflow, Window, blue, div, green, px,
+    white,
 };
 use gpui_component::button::Button;
 use gpui_component::label::Label;
@@ -349,8 +350,10 @@ impl Render for PortPanel {
                             )
                             .child(
                                 // 这里套一层是为了正确的控制缩放关系，Select内部使用SizeFull，如果不再套一层布局会有问题
-                                div().flex_1().child(
+                                div().flex_1().overflow_hidden().child(
                                     Select::new(&self.port_info_select)
+                                        .w_full()
+                                        .text_ellipsis()
                                         .when_else(
                                             !self.open_state,
                                             |select| select.cursor_pointer(),
@@ -373,8 +376,10 @@ impl Render for PortPanel {
                                     .flex_grow_0(),
                             )
                             .child(
-                                div().flex_1().child(
+                                div().flex_1().overflow_hidden().child(
                                     Select::new(&self.band_rate_select)
+                                        .w_full()
+                                        .text_ellipsis()
                                         .when_else(
                                             !self.open_state,
                                             |select| select.cursor_pointer(),
@@ -397,8 +402,10 @@ impl Render for PortPanel {
                                     .flex_grow_0(),
                             )
                             .child(
-                                div().flex_1().child(
+                                div().flex_1().overflow_hidden().child(
                                     Select::new(&self.parity_select)
+                                        .w_full()
+                                        .text_ellipsis()
                                         .when_else(
                                             !self.open_state,
                                             |select| select.cursor_pointer(),
@@ -421,8 +428,10 @@ impl Render for PortPanel {
                                     .flex_grow_0(),
                             )
                             .child(
-                                div().flex_1().child(
+                                div().flex_1().overflow_hidden().child(
                                     Select::new(&self.data_bit_select)
+                                        .w_full()
+                                        .text_ellipsis()
                                         .when_else(
                                             !self.open_state,
                                             |select| select.cursor_pointer(),
@@ -445,8 +454,10 @@ impl Render for PortPanel {
                                     .flex_grow_0(),
                             )
                             .child(
-                                div().flex_1().child(
+                                div().flex_1().overflow_hidden().child(
                                     Select::new(&self.stop_bit_select)
+                                        .w_full()
+                                        .text_ellipsis()
                                         .when_else(
                                             !self.open_state,
                                             |select| select.cursor_pointer(),

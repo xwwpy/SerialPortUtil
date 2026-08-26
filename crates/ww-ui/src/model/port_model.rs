@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use gpui::{AsyncApp, WeakEntity};
 use gpui_component::select::SelectItem;
 use serde::{Deserialize, Serialize};
@@ -184,8 +186,18 @@ impl SelectItem for StopBitsItem {
 }
 
 pub async fn port_task(
-    _port_handle: Box<dyn SerialPort>,
+    mut port_handle: Box<dyn SerialPort>,
     _port_panel: WeakEntity<PortPanel>,
     _cx: &mut AsyncApp,
 ) {
+    let mut buf = [0u8; 1024];
+    loop {
+        let n = port_handle.read(&mut buf).unwrap_or(0);
+        if n > 0 {
+            println!("{}", unsafe {
+                String::from_raw_parts(&mut buf as *mut u8, n, 1024)
+            });
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }

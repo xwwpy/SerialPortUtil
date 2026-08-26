@@ -7,10 +7,10 @@ use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
     ParentElement, Render, Styled, Subscription, Task, Window, blue, div, green, px, white,
 };
-use gpui_component::IndexPath;
 use gpui_component::button::Button;
 use gpui_component::label::Label;
 use gpui_component::select::{SearchableVec, Select, SelectState};
+use gpui_component::{Disableable, IndexPath, Sizable};
 
 use ww_protocol::{get_ports, model::Ports};
 
@@ -123,16 +123,16 @@ impl PortPanel {
         let ports = get_ports();
 
         // 如果没有发生变化，就直接返回
-        if self
-            .ports
-            .get_ports()
-            .unwrap()
-            .iter()
-            .zip(&ports)
-            .any(|(old, new)| old.port_name != new.port_name)
+        let old_ports = self.ports.get_ports().unwrap();
+        if old_ports.len() == ports.len()
+            && old_ports
+                .iter()
+                .zip(&ports)
+                .all(|(old, new)| old.port_name == new.port_name)
         {
-            tracing::info!("ports info not changed");
             return;
+        } else {
+            tracing::info!("ports info changed");
         }
 
         // 更新内部保存的串口信息数组
@@ -188,8 +188,16 @@ impl PortPanel {
         let _ = self.update_info_sub.take();
     }
 
-    pub fn open_port(&mut self, selected_port_name: String, cx: &mut Context<Self>) {
+    pub fn open_port(&mut self, cx: &mut Context<Self>) {
         // 更新选中的串口
+        // 获取串口名
+        let port_name = self.port_info_select.read(cx).selected_value();
+        if port_name == None {
+            // TODO 发送打开失败事件
+            return;
+        }
+
+        let selected_port_name = port_name.unwrap().clone();
         // 获取当前选中的波特率
         let baud_rate = self.band_rate_select.read(cx).selected_value().unwrap();
         // 获取当前选中的校验位
@@ -244,7 +252,7 @@ impl PortPanel {
 impl Render for PortPanel {
     fn render(
         &mut self,
-        _window: &mut gpui::Window,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl gpui::prelude::IntoElement {
         div()
@@ -278,7 +286,38 @@ impl Render for PortPanel {
                             None => "未选择串口...".into(),
                         },
                     ))
-                    .child(div().child(Button::new("open/close"))),
+                    .child(
+                        div().child(
+                            Button::new("open/close")
+                                .size(window.rem_size() * 2.)
+                                .flex_shrink_0()
+                                .on_click(cx.listener(|this, _event, _window, cx| {
+                                    if this.open_state {
+                                        this.close_port(cx);
+                                    } else {
+                                        this.open_port(cx);
+                                    }
+                                    cx.notify();
+                                }))
+                                .rounded_full()
+                                .p_1()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(self.open_state, |this| this.border_color(green()))
+                                .child(
+                                    div()
+                                        .size_full()
+                                        .rounded_full()
+                                        .when(self.open_state, |this| this.bg(green())),
+                                )
+                                .when_else(
+                                    self.port_info_select.read(cx).selected_value().is_none(),
+                                    |this| this.disabled(true).cursor_not_allowed(),
+                                    |this| this.disabled(false).cursor_pointer(),
+                                ),
+                        ),
+                    ),
             )
             // 串口配置选项卡
             .child(
@@ -345,14 +384,6 @@ impl Render for PortPanel {
                                         .placeholder("选择波特率"),
                                 ),
                             ),
-                    )
-                    .child(
-                        div().flex().w_full().items_center().child(
-                            Label::new("数据流控：")
-                                .w(px(100.))
-                                .flex_shrink_0()
-                                .flex_grow_0(),
-                        ),
                     )
                     .child(
                         div()
@@ -425,15 +456,23 @@ impl Render for PortPanel {
                                         .placeholder("选择停止位个数"),
                                 ),
                             ),
-                    )
-                    .child(
-                        div().flex().w_full().items_center().child(
-                            Label::new("流控信号：")
-                                .w(px(100.))
-                                .flex_shrink_0()
-                                .flex_grow_0(),
-                        ),
                     ),
+                // .child(
+                //     div().flex().w_full().items_center().child(
+                //         Label::new("数据流控：")
+                //             .w(px(100.))
+                //             .flex_shrink_0()
+                //             .flex_grow_0(),
+                //     ),
+                // )
+                // .child(
+                //     div().flex().w_full().items_center().child(
+                //         Label::new("流控信号：")
+                //             .w(px(100.))
+                //             .flex_shrink_0()
+                //             .flex_grow_0(),
+                //     ),
+                // ),
             )
     }
 }

@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::event::UpdatePortsInfo;
 use crate::ui::info::Info;
+use crate::ui::io_panel::IoPanel;
 use crate::ui::port_panel::PortPanel;
 use crate::ui::title_bar::TitleBar;
 use crate::ui_config;
@@ -19,6 +20,7 @@ pub struct MainView {
     focus_handle: FocusHandle,
     title_bar: Entity<TitleBar>,
     port_panel: Entity<PortPanel>,
+    io_panel: Entity<IoPanel>,
     info: Entity<Info>,
 }
 
@@ -39,6 +41,7 @@ impl MainView {
             focus_handle: cx.focus_handle(),
             title_bar: cx.new(|cx| TitleBar::new(cx)),
             port_panel: port_panel,
+            io_panel: cx.new(|cx| IoPanel::new(cx)),
             info: cx.new(|cx| Info::new(cx)),
         }
     }
@@ -87,7 +90,8 @@ impl Render for MainView {
                             .flex()
                             .items_center()
                             .justify_start()
-                            .child(self.port_panel.clone()),
+                            .child(self.port_panel.clone())
+                            .child(self.io_panel.clone()),
                     ),
             )
             .child(

@@ -2,16 +2,17 @@ use crate::event::ReceivedData;
 use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, StopBitsItem, port_task,
 };
+
 use crate::ui_config;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
     ParentElement, Render, Styled, Subscription, Task, Window, div, green, px, rgb, white,
 };
-use gpui_component::button::{Button, ButtonVariant};
+use gpui_component::button::Button;
 use gpui_component::dialog::DialogButtonProps;
 use gpui_component::label::Label;
-use gpui_component::select::{SearchableVec, Select, SelectState};
+use gpui_component::select::{SearchableVec, Select, SelectItem, SelectState};
 use gpui_component::{Disableable, IndexPath, WindowExt};
 
 use ww_protocol::{get_ports, model::Ports};
@@ -193,22 +194,12 @@ impl PortPanel {
         // 获取串口名
         let port_name = self.port_info_select.read(cx).selected_value();
         if port_name == None {
-            // TODO 发送打开失败事件
             window.open_alert_dialog(cx, |alert, _, _cx| {
                 alert
-                    .title("确定要关闭窗口？")
-                    .description("关闭窗口后会关闭已打开的串口的连接")
-                    .button_props(
-                        DialogButtonProps::default()
-                            .ok_variant(ButtonVariant::Danger) // 危险红色按钮
-                            .ok_text("关闭")
-                            .cancel_text("取消")
-                            .show_cancel(true),
-                    )
-                    .on_ok(|_, window, _cx| {
-                        window.remove_window();
-                        true
-                    })
+                    .title("未选择串口")
+                    .description("请选择串口后再尝试打开串口")
+                    .button_props(DialogButtonProps::default().ok_text("关闭"))
+                    .on_ok(|_, _window, _cx| true)
             });
             return;
         }
@@ -236,6 +227,7 @@ impl PortPanel {
             read_timeout,
         ) {
             tracing::error!("Failed to select port: {:?}", e);
+
             return;
         }
         // 打开串口
@@ -243,6 +235,13 @@ impl PortPanel {
         let port = self.ports.open_port();
         if let Err(e) = port {
             tracing::error!("Failed to open port: {:?}", e);
+            window.open_alert_dialog(cx, move |alert, _, _cx| {
+                alert
+                    .title("打开串口失败")
+                    .description(e.to_string().title())
+                    .button_props(DialogButtonProps::default().ok_text("关闭"))
+                    .on_ok(|_, _window, _cx| true)
+            });
             self.open_state = false;
             return;
         }

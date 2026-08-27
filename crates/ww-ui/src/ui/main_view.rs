@@ -40,13 +40,15 @@ impl MainView {
         });
         let port_panel_cloned = port_panel.clone();
         cx.spawn(update_ports_info).detach();
+
+        let io_panel = cx.new(|cx| IoPanel::new(cx, window, port_panel_cloned));
         Self {
             title_bar: cx.new(|cx| TitleBar::new(cx)),
             left_focus_handle: cx.focus_handle(),
             right_focus_handle: cx.focus_handle(),
             port_panel: port_panel,
-            config_panel: cx.new(|cx| ConfigPanel::new(window, cx)),
-            io_panel: cx.new(|cx| IoPanel::new(cx, port_panel_cloned)),
+            config_panel: cx.new(|cx| ConfigPanel::new(window, cx, io_panel.clone())),
+            io_panel: io_panel,
             info: cx.new(|cx| Info::new(cx)),
         }
     }

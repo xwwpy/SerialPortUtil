@@ -1,13 +1,20 @@
 pub struct Line {
-    text: String,
+    data: Vec<u8>,
 }
 
 impl Line {
-    pub fn new(text: impl Into<String>) -> Self {
-        Self { text: text.into() }
+    /// 创建一个空行
+    pub fn new_empty() -> Self {
+        Self { data: Vec::new() }
     }
 
-    pub fn text(&self) -> &str {
-        &self.text
+    /// 往行尾追加一个字节
+    pub fn push(&mut self, byte: u8) {
+        self.data.push(byte);
+    }
+
+    /// 获取该行的原始字节
+    pub fn bytes(&self) -> &[u8] {
+        &self.data
     }
 }

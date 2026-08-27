@@ -76,6 +76,8 @@ pub struct CommonConfig {
     font_size: Option<u32>,
     default_border_color: Option<u32>,
     focus_border_color: Option<u32>,
+    encoding: Option<String>,
+    decoding: Option<String>,
 }
 
 impl CommonConfig {
@@ -104,6 +106,20 @@ impl CommonConfig {
         self.focus_border_color.unwrap_or_else(|| {
             tracing::info!("没有配置聚焦边框颜色，使用默认值：0x8A2BE2");
             0x8A2BE2
+        })
+    }
+
+    pub fn get_encoding(&self) -> String {
+        self.encoding.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置默认encoding，使用默认值：Utf8");
+            "Utf8".into()
+        })
+    }
+
+    pub fn get_decoding(&self) -> String {
+        self.decoding.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置默认decoding，使用默认值：Utf8");
+            "Utf8".into()
         })
     }
 }

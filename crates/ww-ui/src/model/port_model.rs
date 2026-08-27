@@ -5,7 +5,10 @@ use gpui_component::select::SelectItem;
 use serde::{Deserialize, Serialize};
 use ww_protocol::{DataBits, Parity, SerialPort, SerialPortInfo, SerialPortType, StopBits};
 
-use crate::{event::ReceivedData, ui::port_panel::PortPanel};
+use crate::{
+    event::{PortError, ReceivedData},
+    ui::port_panel::PortPanel,
+};
 
 #[derive(Debug, Clone)]
 pub struct PortInfoItem {
@@ -191,8 +194,19 @@ pub async fn port_task(
     cx: &mut AsyncApp,
 ) {
     let mut buf = [0u8; 1024];
+    let err_msg;
     loop {
-        let n = port_handle.read(&mut buf).unwrap_or(0);
+        let res = port_handle.read(&mut buf);
+
+        let n = match res {
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => 0,
+            Err(e) => {
+                tracing::error!("读取串口失败：{e}");
+                err_msg = e.to_string();
+                break; // 或触发关闭流程
+            }
+        };
         if n > 0 {
             let _ = port_panel.update(cx, |_this, cx| {
                 cx.emit(ReceivedData {
@@ -202,4 +216,11 @@ pub async fn port_task(
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+
+    // 读取串口失败，发送失败事件
+    let _ = port_panel.update(cx, |this, cx| {
+        this.open_state = false;
+        cx.emit(PortError { message: err_msg });
+        cx.notify();
+    });
 }

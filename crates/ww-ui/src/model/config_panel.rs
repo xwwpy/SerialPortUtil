@@ -130,10 +130,6 @@ impl DecodingItem {
     pub fn new(encoding: Supported) -> Self {
         Self { encoding }
     }
-
-    pub fn encoding(&self) -> Supported {
-        self.encoding
-    }
 }
 
 impl SelectItem for DecodingItem {
@@ -163,10 +159,6 @@ impl From<Supported> for EncodingItem {
 impl EncodingItem {
     pub fn new(encoding: Supported) -> Self {
         Self { encoding }
-    }
-
-    pub fn encoding(&self) -> Supported {
-        self.encoding
     }
 }
 

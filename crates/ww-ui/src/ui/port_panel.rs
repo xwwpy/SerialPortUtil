@@ -1,4 +1,4 @@
-use crate::event::ReceivedData;
+use crate::event::{PortError, ReceivedData};
 use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, StopBitsItem, port_task,
 };
@@ -7,7 +7,8 @@ use crate::ui_config;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
-    ParentElement, Render, Styled, Subscription, Task, Window, div, green, px, rgb, white,
+    ParentElement, Render, SharedString, Styled, Subscription, Task, Window, div, green, px, rgb,
+    white,
 };
 use gpui_component::button::Button;
 use gpui_component::dialog::DialogButtonProps;
@@ -22,7 +23,7 @@ pub struct PortPanel {
     ports: Ports,
     port_open_focus_handle: FocusHandle,
     port_config_focus_handle: FocusHandle,
-    open_state: bool, // 当前串口是否开启
+    pub open_state: bool, // 当前串口是否开启
 
     port_handle_task: Option<Task<()>>,
 
@@ -37,12 +38,28 @@ pub struct PortPanel {
 
 impl EventEmitter<ReceivedData> for PortPanel {}
 
+impl EventEmitter<PortError> for PortPanel {}
+
 impl PortPanel {
     pub fn new(
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
         update_info_sub: Subscription,
     ) -> Self {
+        let window_handle = window.window_handle();
+        cx.subscribe_self(move |_this, event: &PortError, cx| {
+            let msg = event.message.clone();
+            let _ = window_handle.update(cx, move |_view, window, cx| {
+                window.open_alert_dialog(cx, move |alert, _, _cx| {
+                    alert
+                        .title("出现了错误")
+                        .description(SharedString::from(&msg))
+                        .button_props(DialogButtonProps::default().ok_text("关闭"))
+                        .on_ok(|_, _window, _cx| true)
+                });
+            });
+        })
+        .detach();
         Self {
             window: window.window_handle(),
             ports: Ports::new(),

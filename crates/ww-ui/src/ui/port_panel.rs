@@ -5,9 +5,8 @@ use crate::model::port_model::{
 use crate::ui_config;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, ParentElement, Render, Styled, Subscription, Task, Window, blue, div,
-    green, px, white,
+    AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
+    ParentElement, Render, Styled, Subscription, Task, Window, div, green, px, rgb, white,
 };
 use gpui_component::button::{Button, ButtonVariant};
 use gpui_component::dialog::DialogButtonProps;
@@ -20,7 +19,8 @@ use ww_protocol::{get_ports, model::Ports};
 pub struct PortPanel {
     window: AnyWindowHandle,
     ports: Ports,
-    focus_handle: FocusHandle,
+    port_open_focus_handle: FocusHandle,
+    port_config_focus_handle: FocusHandle,
     open_state: bool, // 当前串口是否开启
 
     port_handle_task: Option<Task<()>>,
@@ -34,12 +34,6 @@ pub struct PortPanel {
     stop_bit_select: Entity<SelectState<SearchableVec<StopBitsItem>>>,
 }
 
-impl Focusable for PortPanel {
-    fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
-        self.focus_handle.clone()
-    }
-}
-
 impl EventEmitter<ReceivedData> for PortPanel {}
 
 impl PortPanel {
@@ -51,7 +45,8 @@ impl PortPanel {
         Self {
             window: window.window_handle(),
             ports: Ports::new(),
-            focus_handle: cx.focus_handle(),
+            port_open_focus_handle: cx.focus_handle(),
+            port_config_focus_handle: cx.focus_handle(),
             open_state: false,
             port_handle_task: None,
             update_info_sub: Some(update_info_sub),
@@ -276,219 +271,231 @@ impl Render for PortPanel {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl gpui::prelude::IntoElement {
+        let config = ui_config::get().get_common_config();
         div()
             .id("portPanel")
             .flex()
             .flex_col()
-            .h_full()
-            .w_1_3()
-            .p_2()
+            .w_full()
             .gap_4()
-            .rounded_md()
-            .border_1()
-            .border_color(blue())
             .child(
-                div()
-                    .flex()
-                    .w_full()
-                    .items_center()
-                    .justify_around()
-                    .p_4()
-                    .gap_4()
-                    .overflow_hidden()
-                    .border_1()
-                    .border_color(green())
-                    .rounded_md()
-                    .bg(white())
-                    .shadow_md()
-                    .child(
-                        Label::new(match self.port_info_select.read(cx).selected_value() {
-                            Some(port_name) => format!("当前串口: {}", port_name),
-                            None => "未选择串口...".into(),
-                        })
-                        .text_color(green()),
-                    )
-                    .child(
-                        div().child(
-                            Button::new("open/close")
-                                .size(window.rem_size() * 2.)
-                                .flex_shrink_0()
-                                .on_click(cx.listener(|this, _event, window, cx| {
-                                    if this.open_state {
-                                        this.close_port(cx);
-                                    } else {
-                                        this.open_port(cx, window);
-                                    }
-                                    cx.notify();
-                                }))
-                                .rounded_full()
-                                .p_1()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .when(self.open_state, |this| this.border_color(green()))
-                                .child(
-                                    div()
-                                        .size_full()
-                                        .rounded_full()
-                                        .when(self.open_state, |this| this.bg(green())),
-                                )
-                                .when_else(
-                                    self.port_info_select.read(cx).selected_value().is_none(),
-                                    |this| this.disabled(true).cursor_not_allowed(),
-                                    |this| this.disabled(false).cursor_pointer(),
-                                ),
+                // 串口选择信息和打开按钮
+                div().p_2().bg(white()).shadow_md().rounded_md().child(
+                    div()
+                        .flex()
+                        .w_full()
+                        .items_center()
+                        .justify_around()
+                        .p_4()
+                        .gap_4()
+                        .overflow_hidden()
+                        .border_1()
+                        .track_focus(&self.port_open_focus_handle)
+                        .when_else(
+                            self.port_open_focus_handle.is_focused(window),
+                            |div| div.border_color(rgb(config.get_focus_border_color())),
+                            |div| div.border_color(rgb(config.get_default_border_color())),
+                        )
+                        .rounded_md()
+                        // .bg(white())
+                        // .shadow_md()
+                        .child(
+                            Label::new(match self.port_info_select.read(cx).selected_value() {
+                                Some(port_name) => format!("当前串口: {}", port_name),
+                                None => "未选择串口...".into(),
+                            })
+                            .text_color(green()),
+                        )
+                        .child(
+                            // 打开和关闭串口按钮
+                            div().child(
+                                Button::new("open/close")
+                                    .size(window.rem_size() * 2.)
+                                    .flex_shrink_0()
+                                    .on_click(cx.listener(|this, _event, window, cx| {
+                                        if this.open_state {
+                                            this.close_port(cx);
+                                        } else {
+                                            this.open_port(cx, window);
+                                        }
+                                        cx.notify();
+                                    }))
+                                    .rounded_full()
+                                    .p_1()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .when(self.open_state, |this| this.border_color(green()))
+                                    .child(
+                                        div()
+                                            .size_full()
+                                            .rounded_full()
+                                            .when(self.open_state, |this| this.bg(green())),
+                                    )
+                                    .when_else(
+                                        self.port_info_select.read(cx).selected_value().is_none(),
+                                        |this| this.disabled(true).cursor_not_allowed(),
+                                        |this| this.disabled(false).cursor_pointer(),
+                                    ),
+                            ),
                         ),
-                    ),
+                ),
             )
             // 串口配置选项卡
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .w_full()
-                    .p_4()
-                    .gap_4()
-                    .items_start()
-                    .justify_start()
-                    .overflow_hidden()
-                    .border_1()
-                    .border_color(green())
-                    .rounded_md()
-                    .bg(white())
-                    .shadow_md()
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .child(
-                                Label::new("串口号：")
-                                    .w(px(100.))
-                                    // 这里设置flex_shrink_0和flex_grow_0是为了防止标签被压缩或拉伸
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                // 这里套一层是为了正确的控制缩放关系，Select内部使用SizeFull，如果不再套一层布局会有问题
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.port_info_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .when_else(
-                                            !self.open_state,
-                                            |select| select.cursor_pointer(),
-                                            |select| select.cursor_not_allowed(),
-                                        )
-                                        .disabled(self.open_state)
-                                        .placeholder("选择Com"),
+                div().p_2().bg(white()).shadow_md().rounded_md().child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .w_full()
+                        .p_4()
+                        .gap_4()
+                        .items_start()
+                        .justify_start()
+                        .overflow_hidden()
+                        .border_1()
+                        .track_focus(&self.port_config_focus_handle)
+                        .when_else(
+                            self.port_config_focus_handle.is_focused(window),
+                            |div| div.border_color(rgb(config.get_focus_border_color())),
+                            |div| div.border_color(rgb(config.get_default_border_color())),
+                        )
+                        .rounded_md()
+                        // .bg(white())
+                        // .shadow_md()
+                        .child(
+                            div()
+                                .flex()
+                                .w_full()
+                                .items_center()
+                                .child(
+                                    Label::new("串口号：")
+                                        .w(px(100.))
+                                        // 这里设置flex_shrink_0和flex_grow_0是为了防止标签被压缩或拉伸
+                                        .flex_shrink_0()
+                                        .flex_grow_0(),
+                                )
+                                .child(
+                                    // 这里套一层是为了正确的控制缩放关系，Select内部使用SizeFull，如果不再套一层布局会有问题
+                                    div().flex_1().overflow_hidden().child(
+                                        Select::new(&self.port_info_select)
+                                            .w_full()
+                                            .text_ellipsis()
+                                            .when_else(
+                                                !self.open_state,
+                                                |select| select.cursor_pointer(),
+                                                |select| select.cursor_not_allowed(),
+                                            )
+                                            .disabled(self.open_state)
+                                            .placeholder("选择Com"),
+                                    ),
                                 ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .child(
-                                Label::new("波特率：")
-                                    .w(px(100.))
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.band_rate_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .when_else(
-                                            !self.open_state,
-                                            |select| select.cursor_pointer(),
-                                            |select| select.cursor_not_allowed(),
-                                        )
-                                        .disabled(self.open_state)
-                                        .placeholder("选择波特率"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .w_full()
+                                .items_center()
+                                .child(
+                                    Label::new("波特率：")
+                                        .w(px(100.))
+                                        .flex_shrink_0()
+                                        .flex_grow_0(),
+                                )
+                                .child(
+                                    div().flex_1().overflow_hidden().child(
+                                        Select::new(&self.band_rate_select)
+                                            .w_full()
+                                            .text_ellipsis()
+                                            .when_else(
+                                                !self.open_state,
+                                                |select| select.cursor_pointer(),
+                                                |select| select.cursor_not_allowed(),
+                                            )
+                                            .disabled(self.open_state)
+                                            .placeholder("选择波特率"),
+                                    ),
                                 ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .child(
-                                Label::new("校验位：")
-                                    .w(px(100.))
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.parity_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .when_else(
-                                            !self.open_state,
-                                            |select| select.cursor_pointer(),
-                                            |select| select.cursor_not_allowed(),
-                                        )
-                                        .disabled(self.open_state)
-                                        .placeholder("选择校验位"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .w_full()
+                                .items_center()
+                                .child(
+                                    Label::new("校验位：")
+                                        .w(px(100.))
+                                        .flex_shrink_0()
+                                        .flex_grow_0(),
+                                )
+                                .child(
+                                    div().flex_1().overflow_hidden().child(
+                                        Select::new(&self.parity_select)
+                                            .w_full()
+                                            .text_ellipsis()
+                                            .when_else(
+                                                !self.open_state,
+                                                |select| select.cursor_pointer(),
+                                                |select| select.cursor_not_allowed(),
+                                            )
+                                            .disabled(self.open_state)
+                                            .placeholder("选择校验位"),
+                                    ),
                                 ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .child(
-                                Label::new("数据位数：")
-                                    .w(px(100.))
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.data_bit_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .when_else(
-                                            !self.open_state,
-                                            |select| select.cursor_pointer(),
-                                            |select| select.cursor_not_allowed(),
-                                        )
-                                        .disabled(self.open_state)
-                                        .placeholder("选择数据位个数"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .w_full()
+                                .items_center()
+                                .child(
+                                    Label::new("数据位数：")
+                                        .w(px(100.))
+                                        .flex_shrink_0()
+                                        .flex_grow_0(),
+                                )
+                                .child(
+                                    div().flex_1().overflow_hidden().child(
+                                        Select::new(&self.data_bit_select)
+                                            .w_full()
+                                            .text_ellipsis()
+                                            .when_else(
+                                                !self.open_state,
+                                                |select| select.cursor_pointer(),
+                                                |select| select.cursor_not_allowed(),
+                                            )
+                                            .disabled(self.open_state)
+                                            .placeholder("选择数据位个数"),
+                                    ),
                                 ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .child(
-                                Label::new("停止位数：")
-                                    .w(px(100.))
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.stop_bit_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .when_else(
-                                            !self.open_state,
-                                            |select| select.cursor_pointer(),
-                                            |select| select.cursor_not_allowed(),
-                                        )
-                                        .disabled(self.open_state)
-                                        .placeholder("选择停止位个数"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .w_full()
+                                .items_center()
+                                .child(
+                                    Label::new("停止位数：")
+                                        .w(px(100.))
+                                        .flex_shrink_0()
+                                        .flex_grow_0(),
+                                )
+                                .child(
+                                    div().flex_1().overflow_hidden().child(
+                                        Select::new(&self.stop_bit_select)
+                                            .w_full()
+                                            .text_ellipsis()
+                                            .when_else(
+                                                !self.open_state,
+                                                |select| select.cursor_pointer(),
+                                                |select| select.cursor_not_allowed(),
+                                            )
+                                            .disabled(self.open_state)
+                                            .placeholder("选择停止位个数"),
+                                    ),
                                 ),
-                            ),
-                    ),
+                        ),
+                ),
                 // .child(
                 //     div().flex().w_full().items_center().child(
                 //         Label::new("数据流控：")

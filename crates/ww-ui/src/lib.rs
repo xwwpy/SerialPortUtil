@@ -12,9 +12,9 @@ use crate::{common::log, ui::main_view::MainView, ui_config::get};
 use gpui::{
     AppContext, Bounds, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement,
     Render, Styled, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
-    div, px, size,
+    div, green, px, size,
 };
-use gpui_component::Root;
+use gpui_component::{Root, Theme};
 
 struct App {
     focus: FocusHandle,
@@ -96,6 +96,12 @@ pub fn run() {
 
             let window_handle = cx
                 .open_window(options, |window, cx| {
+                    Theme::global_mut(cx).primary = green();
+
+                    let config = ui_config::get().get_common_config();
+                    Theme::global_mut(cx).font_family = config.get_font_family().into();
+                    Theme::global_mut(cx).font_size = config.get_font_size().into();
+
                     let view = cx.new(|cx| App::new(cx, window));
                     cx.new(|cx| Root::new(view, window, cx))
                 })

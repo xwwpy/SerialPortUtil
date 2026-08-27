@@ -1,4 +1,4 @@
-use gpui::{Context, ParentElement, Render, SharedString, Styled, black, div};
+use gpui::{Context, ParentElement, Render, SharedString, Styled, div};
 use gpui_component::gray;
 
 use crate::ui_config::get;
@@ -28,9 +28,7 @@ impl Render for Info {
             .flex()
             .size_full()
             .gap_2()
-            .border_1()
-            .border_color(black())
-            .bg(gray(50))
+            .bg(gray(300))
             .rounded_md()
             .items_center()
             .justify_center()

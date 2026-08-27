@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::event::UpdatePortsInfo;
+use crate::ui::config_panel::ConfigPanel;
 use crate::ui::info::Info;
 use crate::ui::io_panel::IoPanel;
 use crate::ui::port_panel::PortPanel;
@@ -9,18 +10,19 @@ use crate::ui_config;
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, AppContext, AsyncApp, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, ParentElement, Render, Styled, WeakEntity, Window, blue, div,
-    px, rgb,
+    AppContext, AsyncApp, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
+    IntoElement, ParentElement, Render, Styled, WeakEntity, Window, div, rgb, white,
 };
 
 impl EventEmitter<UpdatePortsInfo> for MainView {}
 
 pub struct MainView {
-    focus_handle: FocusHandle,
     title_bar: Entity<TitleBar>,
+    left_focus_handle: FocusHandle,
+    right_focus_handle: FocusHandle,
     port_panel: Entity<PortPanel>,
     io_panel: Entity<IoPanel>,
+    config_panel: Entity<ConfigPanel>,
     info: Entity<Info>,
 }
 
@@ -39,9 +41,11 @@ impl MainView {
         let port_panel_cloned = port_panel.clone();
         cx.spawn(update_ports_info).detach();
         Self {
-            focus_handle: cx.focus_handle(),
             title_bar: cx.new(|cx| TitleBar::new(cx)),
+            left_focus_handle: cx.focus_handle(),
+            right_focus_handle: cx.focus_handle(),
             port_panel: port_panel,
+            config_panel: cx.new(|cx| ConfigPanel::new(window, cx)),
             io_panel: cx.new(|cx| IoPanel::new(cx, port_panel_cloned)),
             info: cx.new(|cx| Info::new(cx)),
         }
@@ -50,6 +54,7 @@ impl MainView {
 
 impl Render for MainView {
     fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let config = ui_config::get().get_common_config();
         div()
             .size_full()
             .flex()
@@ -57,6 +62,7 @@ impl Render for MainView {
             .items_center()
             .justify_around()
             .gap_1()
+            // title bar
             .child(
                 div()
                     .id("TitleBar")
@@ -65,34 +71,74 @@ impl Render for MainView {
                     .flex_grow(0.)
                     .justify_center()
                     .items_center()
-                    .border_color(blue())
                     .border_1()
+                    .border_color(rgb(config.get_default_border_color()))
+                    .bg(white())
+                    .shadow_md()
                     .rounded_md()
                     .child(self.title_bar.clone()),
             )
+            // main content
             .child(
                 div()
                     .w_full()
                     .flex()
-                    .flex_grow(1.)
+                    .flex_grow_1()
                     .justify_center()
                     .items_center()
-                    .track_focus(&self.focus_handle)
-                    .when_else(
-                        self.focus_handle.is_focused(window),
-                        |div| div.border_color(rgb(0x8A2BE2)),
-                        |div| div.border_color(blue()),
-                    )
-                    .border(px(1.3))
                     .rounded_md()
                     .child(
                         div()
                             .size_full()
                             .flex()
+                            .gap_2()
+                            .p_2()
                             .items_center()
                             .justify_start()
-                            .child(self.port_panel.clone())
-                            .child(self.io_panel.clone()),
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_4()
+                                    .p_2()
+                                    .h_full()
+                                    .w_1_3()
+                                    .track_focus(&self.left_focus_handle)
+                                    .rounded_md()
+                                    .border_1()
+                                    .when_else(
+                                        self.left_focus_handle.is_focused(window),
+                                        |div| {
+                                            div.border_color(rgb(config.get_focus_border_color()))
+                                        },
+                                        |div| {
+                                            div.border_color(rgb(config.get_default_border_color()))
+                                        },
+                                    )
+                                    .child(self.port_panel.clone())
+                                    .child(self.config_panel.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_4()
+                                    .h_full()
+                                    .w_2_3()
+                                    .track_focus(&self.right_focus_handle)
+                                    .rounded_md()
+                                    .border_1()
+                                    .when_else(
+                                        self.right_focus_handle.is_focused(window),
+                                        |div| {
+                                            div.border_color(rgb(config.get_focus_border_color()))
+                                        },
+                                        |div| {
+                                            div.border_color(rgb(config.get_default_border_color()))
+                                        },
+                                    )
+                                    .child(self.io_panel.clone()),
+                            ),
                     ),
             )
             .child(
@@ -102,17 +148,14 @@ impl Render for MainView {
                     .flex_grow(0.)
                     .justify_center()
                     .items_center()
-                    .border_color(blue())
                     .border_1()
+                    .border_color(rgb(config.get_default_border_color()))
+                    .bg(white())
+                    .shadow_md()
                     .rounded_md()
+                    .window_control_area(gpui::WindowControlArea::Drag)
                     .child(self.info.clone()),
             )
-    }
-}
-
-impl Focusable for MainView {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus_handle.clone()
     }
 }
 

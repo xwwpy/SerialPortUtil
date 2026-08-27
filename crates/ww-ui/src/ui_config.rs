@@ -10,6 +10,7 @@ use crate::model::port_model::BaudRateItem;
 static UI_CONFIG: OnceLock<UIConfig> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
 pub struct PortPanelConfig {
     port_update_interval: Option<u64>,
     default_baud_rate: Option<u32>,
@@ -70,6 +71,45 @@ impl LogConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
+pub struct CommonConfig {
+    font_family: Option<String>,
+    font_size: Option<u32>,
+    default_border_color: Option<u32>,
+    focus_border_color: Option<u32>,
+}
+
+impl CommonConfig {
+    pub fn get_font_family(&self) -> String {
+        self.font_family.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置字体，使用默认值：JetBrains Mono");
+            "JetBrains Mono".to_string()
+        })
+    }
+
+    pub fn get_font_size(&self) -> u32 {
+        self.font_size.unwrap_or_else(|| {
+            tracing::info!("没有配置字体大小，使用默认值：14");
+            14
+        })
+    }
+
+    pub fn get_default_border_color(&self) -> u32 {
+        self.default_border_color.unwrap_or_else(|| {
+            tracing::info!("没有配置默认边框颜色，使用默认值：0xFFFFFF");
+            0xFFFFFF
+        })
+    }
+
+    pub fn get_focus_border_color(&self) -> u32 {
+        self.focus_border_color.unwrap_or_else(|| {
+            tracing::info!("没有配置聚焦边框颜色，使用默认值：0x8A2BE2");
+            0x8A2BE2
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
 pub struct AuthorInfoConfig {
     author_name: Option<String>,
     author_email: Option<String>,
@@ -98,6 +138,7 @@ pub struct UIConfig {
     log_config: LogConfig,
     author_info: AuthorInfoConfig,
     port_panel_config: PortPanelConfig,
+    common_config: CommonConfig,
 }
 
 impl UIConfig {
@@ -116,6 +157,10 @@ impl UIConfig {
 
     pub fn get_port_panel_config(&self) -> &PortPanelConfig {
         &self.port_panel_config
+    }
+
+    pub fn get_common_config(&self) -> &CommonConfig {
+        &self.common_config
     }
 }
 

@@ -1,3 +1,5 @@
+pub mod common_ui;
+pub mod config_panel;
 pub mod info;
 pub mod io_panel;
 pub mod main_view;

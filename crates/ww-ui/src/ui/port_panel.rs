@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+
 use crate::event::{PortError, ReceivedData};
 use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, PortMessage, StopBitsItem, port_read_loop,
@@ -25,8 +28,8 @@ pub struct PortPanel {
     port_config_focus_handle: FocusHandle,
     pub open_state: bool, // 当前串口是否开启
 
-    port_handle_task: Option<Task<()>>,
-
+    receive_task: Option<Task<()>>,
+    cancel_flag: Arc<AtomicBool>,
     update_info_sub: Option<Subscription>,
 
     port_info_select: Entity<SelectState<SearchableVec<PortInfoItem>>>,
@@ -66,7 +69,7 @@ impl PortPanel {
             port_open_focus_handle: cx.focus_handle(),
             port_config_focus_handle: cx.focus_handle(),
             open_state: false,
-            port_handle_task: None,
+            receive_task: None,
             update_info_sub: Some(update_info_sub),
             port_info_select: cx
                 .new(|cx| SelectState::new(SearchableVec::new(vec![]), None, window, cx)),
@@ -74,6 +77,7 @@ impl PortPanel {
             parity_select: Self::get_parity_items(window, cx),
             data_bit_select: Self::get_databits_items(window, cx),
             stop_bit_select: Self::get_stopbits_items(window, cx),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -269,7 +273,8 @@ impl PortPanel {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PortMessage>();
 
         // 在独立线程执行阻塞读取，避免卡住 UI 主线程
-        std::thread::spawn(move || port_read_loop(port, tx));
+        let cancel_flag_cloned = self.cancel_flag.clone();
+        std::thread::spawn(move || port_read_loop(port, tx, cancel_flag_cloned));
 
         // 在主线程异步消费读取结果
         let task = cx.spawn(async move |port_panel, cx| {
@@ -292,15 +297,22 @@ impl PortPanel {
             }
         });
 
-        self.port_handle_task = Some(task);
+        self.receive_task = Some(task);
 
         // 更新界面
         cx.notify();
     }
 
     pub fn close_port(&mut self, cx: &mut Context<Self>) {
-        // 丢弃接收端，后台读取线程会在下一次读取后退出并关闭串口
-        self.port_handle_task.take();
+        if self.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        self.cancel_flag
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.receive_task.take();
+        // 等待关闭串口
+        while self.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {}
+
         self.open_state = false;
         cx.notify();
     }

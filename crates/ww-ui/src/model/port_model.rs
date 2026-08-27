@@ -1,3 +1,5 @@
+use std::sync::{Arc, atomic::AtomicBool};
+
 use gpui_component::select::SelectItem;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
@@ -187,9 +189,17 @@ pub enum PortMessage {
     Error(String),
 }
 
-pub fn port_read_loop(mut port_handle: Box<dyn SerialPort>, tx: UnboundedSender<PortMessage>) {
+pub fn port_read_loop(
+    mut port_handle: Box<dyn SerialPort>,
+    tx: UnboundedSender<PortMessage>,
+    cancel_flag: Arc<AtomicBool>,
+) {
     let mut buf = [0u8; 1024];
     loop {
+        if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        }
+
         match port_handle.read(&mut buf) {
             Ok(n) if n > 0 => {
                 if tx.send(PortMessage::Data(buf[..n].to_vec())).is_err() {
@@ -204,4 +214,7 @@ pub fn port_read_loop(mut port_handle: Box<dyn SerialPort>, tx: UnboundedSender<
             }
         }
     }
+    drop(port_handle);
+    tracing::info!("关闭串口成功...");
+    cancel_flag.store(false, std::sync::atomic::Ordering::Relaxed);
 }

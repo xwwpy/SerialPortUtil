@@ -6,9 +6,8 @@ use gpui::{
 };
 use gpui_component::StyledExt;
 use gpui_component::checkbox::Checkbox;
-use gpui_component::input::{Input, InputState, RopeExt};
+use gpui_component::input::{Copy, Input, InputState, RopeExt, SelectAll};
 use gpui_component::label::Label;
-use gpui_component::menu::ContextMenuExt;
 
 use crate::model::config_panel::Supported;
 use crate::ui_config;
@@ -33,6 +32,7 @@ pub struct IoPanel {
     line_has_bytes: bool,
     _receive_data_subscription: Option<Subscription>,
     new_line: bool,
+    received_bytes: u64,
     pub _encoding_changed_subscription: Option<Subscription>,
     pub _decoding_changed_subscription: Option<Subscription>,
 }
@@ -72,10 +72,18 @@ impl Render for IoPanel {
                                 |div| div.border_color(rgb(config.get_focus_border_color())),
                                 |div| div.border_color(rgb(config.get_default_border_color())),
                             )
-                            .child(Input::new(&self.input_state).size_full().disabled(true))
-                            .context_menu(|menu, _window, _cx| {
-                                menu.menu("清空文本", Box::new(ClearText))
-                            }),
+                            .child(
+                                Input::new(&self.input_state)
+                                    .size_full()
+                                    .disabled(true)
+                                    .context_menu(|menu, _window, _cx| {
+                                        menu.menu("复制", Box::new(Copy))
+                                            .separator()
+                                            .menu("全选", Box::new(SelectAll))
+                                            .separator()
+                                            .menu("清空文本", Box::new(ClearText))
+                                    }),
+                            ),
                     ),
             )
             // info view
@@ -92,6 +100,7 @@ impl Render for IoPanel {
                             .size_full()
                             .flex()
                             .items_center()
+                            .justify_evenly()
                             .p_2()
                             .gap_4()
                             .text_sm()
@@ -125,7 +134,11 @@ impl Render for IoPanel {
                                             }))
                                             .cursor_pointer(),
                                     ),
-                            ),
+                            )
+                            .child(div().h_flex().items_center().child(Label::new(format!(
+                                "接收到了{}个字节",
+                                self.received_bytes
+                            )))),
                     ),
             )
             // input view
@@ -190,18 +203,15 @@ impl IoPanel {
             _receive_data_subscription: Some(subscription),
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
+            received_bytes: 0,
         }
     }
 
-    fn clear_text(&mut self, _: &ClearText, _: &mut Window, cx: &mut Context<Self>) {
+    fn clear_text(&mut self, _: &ClearText, window: &mut Window, cx: &mut Context<Self>) {
         // 清空显示内容，并重置当前行的解码状态
-        let window = self.window;
         let input_state = self.input_state.clone();
-        let _ = window.update(cx, |_, window, cx| {
-            input_state.update(cx, |state, cx| {
-                println!("a");
-                state.set_value("", window, cx);
-            });
+        input_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
         });
 
         self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
@@ -216,6 +226,7 @@ impl IoPanel {
             self.decoder_encoding = self.decoding;
             self.line_has_bytes = false;
         }
+        self.received_bytes += datas.len() as u64;
 
         let mut pending = String::new();
 
@@ -262,6 +273,7 @@ impl IoPanel {
         if !pending.is_empty() {
             self.insert_text(pending, cx);
         }
+        cx.notify();
     }
 
     /// 结束当前未完成行：将解码器中残留的不完整字节刷新为文本，并创建新的解码器

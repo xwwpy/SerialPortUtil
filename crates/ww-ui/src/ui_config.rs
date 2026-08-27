@@ -78,6 +78,7 @@ pub struct CommonConfig {
     focus_border_color: Option<u32>,
     encoding: Option<String>,
     decoding: Option<String>,
+    max_lines: Option<usize>,
 }
 
 impl CommonConfig {
@@ -120,6 +121,13 @@ impl CommonConfig {
         self.decoding.clone().unwrap_or_else(|| {
             tracing::info!("没有配置默认decoding，使用默认值：Utf8");
             "Utf8".into()
+        })
+    }
+
+    pub fn get_max_lines(&self) -> usize {
+        self.max_lines.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置默认max_lines，使用默认值：50000");
+            50000
         })
     }
 }

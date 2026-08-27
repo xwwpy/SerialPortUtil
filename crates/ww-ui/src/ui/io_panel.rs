@@ -2,7 +2,7 @@ use encoding_rs::Decoder;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, FocusHandle, InteractiveElement, ParentElement,
-    Render, Styled, Subscription, Window, actions, div, rgb, white,
+    Render, Styled, Subscription, Window, actions, div, green, rgb, white,
 };
 use gpui_component::StyledExt;
 use gpui_component::checkbox::Checkbox;
@@ -33,6 +33,8 @@ pub struct IoPanel {
     _receive_data_subscription: Option<Subscription>,
     new_line: bool,
     received_bytes: u64,
+    max_lines: usize,
+    simple_time_show: bool,
     pub _encoding_changed_subscription: Option<Subscription>,
     pub _decoding_changed_subscription: Option<Subscription>,
 }
@@ -76,6 +78,7 @@ impl Render for IoPanel {
                                 Input::new(&self.input_state)
                                     .size_full()
                                     .disabled(true)
+                                    .text_color(green())
                                     .context_menu(|menu, _window, _cx| {
                                         menu.menu("复制", Box::new(Copy))
                                             .separator()
@@ -135,10 +138,40 @@ impl Render for IoPanel {
                                             .cursor_pointer(),
                                     ),
                             )
-                            .child(div().h_flex().items_center().child(Label::new(format!(
-                                "接收到了{}个字节",
-                                self.received_bytes
-                            )))),
+                            .child(
+                                div()
+                                    .h_flex()
+                                    .items_center()
+                                    .child(Label::new("精简时间："))
+                                    .child(
+                                        Checkbox::new("simple_time_show")
+                                            .checked(self.simple_time_show)
+                                            .on_click(cx.listener(|this, checked, _window, cx| {
+                                                this.simple_time_show = *checked;
+                                                cx.notify();
+                                            }))
+                                            .cursor_pointer(),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .h_flex()
+                                    .items_center()
+                                    .child(
+                                        Label::new(
+                                            // 去掉默认的一行
+                                            (self.input_state.read(cx).text().lines_len() - 1)
+                                                .to_string(),
+                                        )
+                                        .text_color(green()),
+                                    )
+                                    .child(Label::new(format!("/{}-", self.max_lines)))
+                                    .child(
+                                        Label::new(self.received_bytes.to_string())
+                                            .text_color(green()),
+                                    )
+                                    .child(Label::new("个字节")),
+                            ),
                     ),
             )
             // input view
@@ -194,6 +227,7 @@ impl IoPanel {
             input_focus_handle: cx.focus_handle(),
             whether_auto_scroll_to_bottom: true,
             whether_add_timestamp: true,
+            simple_time_show: true,
             encoding: config.get_encoding().into(),
             decoding,
             decoder: decoding.encoding().map(|e| e.new_decoder()),
@@ -204,6 +238,7 @@ impl IoPanel {
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
             received_bytes: 0,
+            max_lines: ui_config::get().get_common_config().get_max_lines(),
         }
     }
 
@@ -234,7 +269,11 @@ impl IoPanel {
             if self.whether_add_timestamp && self.new_line {
                 pending.push_str(&format!(
                     "{} ",
-                    jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S%.3f: ")
+                    if self.simple_time_show {
+                        jiff::Zoned::now().strftime("%H:%M:%S%.3f: ")
+                    } else {
+                        jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S%.3f: ")
+                    }
                 ));
                 self.new_line = false;
             }
@@ -272,8 +311,34 @@ impl IoPanel {
 
         if !pending.is_empty() {
             self.insert_text(pending, cx);
+            // 限制最大行数，超出后释放最前面的文本
         }
         cx.notify();
+    }
+
+    fn trim_to_max_lines(
+        &self,
+        state: &mut InputState,
+        window: &mut Window,
+        cx: &mut Context<InputState>,
+    ) {
+        let start_byte = {
+            let text = state.text();
+            // 去掉默认的一行
+            let total_lines = text.lines_len() - 1;
+            if total_lines > self.max_lines {
+                let excess = total_lines - self.max_lines;
+                Some(text.line_start_offset(excess))
+            } else {
+                None
+            }
+        };
+
+        if let Some(start_byte) = start_byte {
+            // 直接删除最前面的字节范围，而不是 set_value 全量重建
+            state.set_selected_range(0..start_byte, cx);
+            state.replace("", window, cx);
+        }
     }
 
     /// 结束当前未完成行：将解码器中残留的不完整字节刷新为文本，并创建新的解码器
@@ -296,6 +361,7 @@ impl IoPanel {
         let _ = window.update(cx, |_, window, cx| {
             input_state.update(cx, |state, cx| {
                 state.insert(text, window, cx);
+                self.trim_to_max_lines(state, window, cx);
 
                 // 自动滚动到底部
                 if auto_scroll {

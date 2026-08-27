@@ -23,3 +23,4 @@ common_config:
   focus_border_color: 0x8A2BE2
   encoding: Utf8
   decoding: Utf8
+  max_lines: 5000

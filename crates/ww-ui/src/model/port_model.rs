@@ -1,14 +1,7 @@
-use std::time::Duration;
-
-use gpui::{AsyncApp, WeakEntity};
 use gpui_component::select::SelectItem;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 use ww_protocol::{DataBits, Parity, SerialPort, SerialPortInfo, SerialPortType, StopBits};
-
-use crate::{
-    event::{PortError, ReceivedData},
-    ui::port_panel::PortPanel,
-};
 
 #[derive(Debug, Clone)]
 pub struct PortInfoItem {
@@ -188,39 +181,27 @@ impl SelectItem for StopBitsItem {
     }
 }
 
-pub async fn port_task(
-    mut port_handle: Box<dyn SerialPort>,
-    port_panel: WeakEntity<PortPanel>,
-    cx: &mut AsyncApp,
-) {
+/// 后台读取线程与主线程之间传递的消息
+pub enum PortMessage {
+    Data(Vec<u8>),
+    Error(String),
+}
+
+pub fn port_read_loop(mut port_handle: Box<dyn SerialPort>, tx: UnboundedSender<PortMessage>) {
     let mut buf = [0u8; 1024];
-    let err_msg;
     loop {
-        let res = port_handle.read(&mut buf);
-
-        let n = match res {
-            Ok(n) => n,
-            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => 0,
-            Err(e) => {
-                tracing::error!("读取串口失败：{e}");
-                err_msg = e.to_string();
-                break; // 或触发关闭流程
+        match port_handle.read(&mut buf) {
+            Ok(n) if n > 0 => {
+                if tx.send(PortMessage::Data(buf[..n].to_vec())).is_err() {
+                    break;
+                }
             }
-        };
-        if n > 0 {
-            let _ = port_panel.update(cx, |_this, cx| {
-                cx.emit(ReceivedData {
-                    data: buf[0..n].to_vec(),
-                });
-            });
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
+            Err(e) => {
+                let _ = tx.send(PortMessage::Error(e.to_string()));
+                break;
+            }
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
     }
-
-    // 读取串口失败，发送失败事件
-    let _ = port_panel.update(cx, |this, cx| {
-        this.open_state = false;
-        cx.emit(PortError { message: err_msg });
-        cx.notify();
-    });
 }

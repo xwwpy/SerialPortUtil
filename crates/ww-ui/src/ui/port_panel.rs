@@ -1,6 +1,6 @@
 use crate::event::{PortError, ReceivedData};
 use crate::model::port_model::{
-    BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, StopBitsItem, port_task,
+    BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, PortMessage, StopBitsItem, port_read_loop,
 };
 
 use crate::ui_config;
@@ -265,7 +265,32 @@ impl PortPanel {
 
         let port = port.unwrap();
 
-        let task = cx.spawn(async move |port_panel, cx| port_task(port, port_panel, cx).await);
+        // 用 channel 把后台线程读取到的数据发回主线程
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PortMessage>();
+
+        // 在独立线程执行阻塞读取，避免卡住 UI 主线程
+        std::thread::spawn(move || port_read_loop(port, tx));
+
+        // 在主线程异步消费读取结果
+        let task = cx.spawn(async move |port_panel, cx| {
+            while let Some(message) = rx.recv().await {
+                match message {
+                    PortMessage::Data(data) => {
+                        let _ = port_panel.update(cx, |_this, cx| {
+                            cx.emit(ReceivedData { data });
+                        });
+                    }
+                    PortMessage::Error(msg) => {
+                        let _ = port_panel.update(cx, |this, cx| {
+                            this.open_state = false;
+                            cx.emit(PortError { message: msg });
+                            cx.notify();
+                        });
+                        break;
+                    }
+                }
+            }
+        });
 
         self.port_handle_task = Some(task);
 
@@ -274,7 +299,7 @@ impl PortPanel {
     }
 
     pub fn close_port(&mut self, cx: &mut Context<Self>) {
-        // 关闭异步任务
+        // 丢弃接收端，后台读取线程会在下一次读取后退出并关闭串口
         self.port_handle_task.take();
         self.open_state = false;
         cx.notify();

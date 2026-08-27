@@ -22,6 +22,7 @@ pub struct IoPanel {
     output_focus_handle: FocusHandle,
     input_focus_handle: FocusHandle,
     whether_auto_scroll_to_bottom: bool,
+    whether_add_timestamp: bool,
     pub encoding: Supported,
     pub decoding: Supported,
     // 当前未完成行的流式解码器；Hex 模式为 None
@@ -31,6 +32,7 @@ pub struct IoPanel {
     // Hex 模式下当前行是否已有内容，用于控制字节间的空格
     line_has_bytes: bool,
     _receive_data_subscription: Option<Subscription>,
+    new_line: bool,
     pub _encoding_changed_subscription: Option<Subscription>,
     pub _decoding_changed_subscription: Option<Subscription>,
 }
@@ -91,7 +93,9 @@ impl Render for IoPanel {
                             .flex()
                             .items_center()
                             .p_2()
+                            .gap_4()
                             .text_sm()
+                            .rounded_md()
                             .child(
                                 div()
                                     .h_flex()
@@ -107,7 +111,21 @@ impl Render for IoPanel {
                                             .cursor_pointer(),
                                     ),
                             )
-                            .rounded_md(),
+                            .child(
+                                div()
+                                    .h_flex()
+                                    .items_center()
+                                    .child(Label::new("添加时间戳："))
+                                    .child(
+                                        Checkbox::new("add_timestamp")
+                                            .checked(self.whether_add_timestamp)
+                                            .on_click(cx.listener(|this, checked, _window, cx| {
+                                                this.whether_add_timestamp = *checked;
+                                                cx.notify();
+                                            }))
+                                            .cursor_pointer(),
+                                    ),
+                            ),
                     ),
             )
             // input view
@@ -162,11 +180,13 @@ impl IoPanel {
             output_focus_handle: cx.focus_handle(),
             input_focus_handle: cx.focus_handle(),
             whether_auto_scroll_to_bottom: true,
+            whether_add_timestamp: true,
             encoding: config.get_encoding().into(),
             decoding,
             decoder: decoding.encoding().map(|e| e.new_decoder()),
             decoder_encoding: decoding,
             line_has_bytes: false,
+            new_line: true,
             _receive_data_subscription: Some(subscription),
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
@@ -179,6 +199,7 @@ impl IoPanel {
         let input_state = self.input_state.clone();
         let _ = window.update(cx, |_, window, cx| {
             input_state.update(cx, |state, cx| {
+                println!("a");
                 state.set_value("", window, cx);
             });
         });
@@ -199,6 +220,13 @@ impl IoPanel {
         let mut pending = String::new();
 
         for &byte in datas {
+            if self.whether_add_timestamp && self.new_line {
+                pending.push_str(&format!(
+                    "{} ",
+                    jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S%.3f: ")
+                ));
+                self.new_line = false;
+            }
             match byte {
                 b'\n' => {
                     // 当前行完成：刷新解码器残留内容，然后追加换行
@@ -207,9 +235,10 @@ impl IoPanel {
                     self.line_has_bytes = false;
                 }
                 b'\r' => {
-                    // 忽略回车符（处理 \r\n）
+                    self.new_line = false;
                 }
                 _ => {
+                    self.new_line = false;
                     // 追加到当前未完成行
                     match &mut self.decoder {
                         Some(decoder) => {
@@ -243,6 +272,7 @@ impl IoPanel {
             let _ = decoder.decode_to_string(&[], pending, true);
         }
         self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
+        self.new_line = true;
     }
 
     /// 向只读编辑器追加文本（增量插入，避免全量重建）

@@ -26,6 +26,7 @@ thiserror = {version = "*"}
 anyhow = {version = "*"}
 serialport = {version = "*"}
 encoding_rs = {version = "*"}
+jiff = {version = "*"}
 
 [dependencies]
 ww-ui = {path = "crates/ww-ui"}

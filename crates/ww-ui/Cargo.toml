@@ -22,3 +22,4 @@ tracing-subscriber = {workspace = true}
 tracing-appender = {workspace = true}
 ww-protocol = {path = "../ww-protocol"}
 encoding_rs = {workspace = true}
+jiff = {workspace = true}

@@ -1,4 +1,4 @@
-use encoding_rs::Decoder;
+use encoding_rs::{Decoder, Encoder};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
@@ -33,11 +33,11 @@ pub struct IoPanel {
     whether_add_timestamp: bool,
     port_open_state: bool,
     pub encoding: Supported,
+
+    pub encoder: Option<Encoder>,
     pub decoding: Supported,
-    // 当前未完成行的流式解码器；Hex 模式为 None
-    decoder: Option<Decoder>,
-    // 解码器对应的编码方式，用于检测解码方式是否发生变化
-    decoder_encoding: Supported,
+    // 当前的流式解码器；Hex 模式为 None
+    pub decoder: Option<Decoder>,
     // Hex 模式下当前行是否已有内容，用于控制字节间的空格
     line_has_bytes: bool,
     _receive_data_subscription: Option<Subscription>,
@@ -305,6 +305,8 @@ impl IoPanel {
         );
 
         let config = ui_config::get().get_common_config();
+
+        let encoding: Supported = config.get_encoding().into();
         let decoding: Supported = config.get_decoding().into();
 
         let io_panel_config = ui_config::get().get_io_panel_config();
@@ -344,10 +346,10 @@ impl IoPanel {
             whether_auto_scroll_to_bottom: true,
             whether_add_timestamp: true,
             simple_time_show: true,
-            encoding: config.get_encoding().into(),
+            encoding,
+            encoder: encoding.encoding().map(|e| e.new_encoder()),
             decoding,
             decoder: decoding.encoding().map(|e| e.new_decoder()),
-            decoder_encoding: decoding,
             line_has_bytes: false,
             new_line: true,
             _receive_data_subscription: Some(subscription),
@@ -373,7 +375,6 @@ impl IoPanel {
         });
 
         self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
-        self.decoder_encoding = self.decoding;
         self.line_has_bytes = false;
     }
 
@@ -412,12 +413,6 @@ impl IoPanel {
     }
 
     pub fn resolve_data(&mut self, datas: &[u8], cx: &mut Context<Self>) {
-        // 解码方式发生变化时，重置解码器（已渲染的内容保持不变，只影响新数据）
-        if self.decoder_encoding != self.decoding {
-            self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
-            self.decoder_encoding = self.decoding;
-            self.line_has_bytes = false;
-        }
         self.received_bytes += datas.len() as u64;
 
         let mut pending = String::new();
@@ -500,11 +495,13 @@ impl IoPanel {
 
     /// 结束当前未完成行：将解码器中残留的不完整字节刷新为文本，并创建新的解码器
     fn finish_line(&mut self, pending: &mut String) {
-        if let Some(mut decoder) = self.decoder.take() {
+        if let Some(ref mut decoder) = self.decoder {
             // flush 可能写入 U+FFFD（3 字节），预留空间避免越界 panic
             pending.reserve(16);
             let _ = decoder.decode_to_string(&[], pending, true);
         }
+        // last=true 会把解码器置为 Finished，必须重新创建新解码器，
+        // 否则下一次 decode_to_string 会 panic（Must not use a decoder that has finished）
         self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
         self.new_line = true;
     }

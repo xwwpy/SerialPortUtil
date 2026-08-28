@@ -218,6 +218,7 @@ impl ConfigPanel {
                  cx| {
                     if let SelectEvent::Confirm(Some(encoding)) = event {
                         this.encoding = encoding.clone();
+                        this.encoder = encoding.encoding().map(|e| e.new_encoder());
                         cx.notify();
                     }
                 },
@@ -234,6 +235,7 @@ impl ConfigPanel {
                  cx| {
                     if let SelectEvent::Confirm(Some(decoding)) = event {
                         this.decoding = decoding.clone();
+                        this.decoder = decoding.encoding().map(|e| e.new_decoder());
                         cx.notify();
                     }
                 },

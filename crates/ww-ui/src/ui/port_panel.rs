@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::event::{PortError, ReceivedData};
+use crate::event::{OpenStateChanged, PortError, ReceivedData};
 use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, PortMessage, StopBitsItem, port_read_loop,
 };
@@ -42,6 +42,8 @@ pub struct PortPanel {
 impl EventEmitter<ReceivedData> for PortPanel {}
 
 impl EventEmitter<PortError> for PortPanel {}
+
+impl EventEmitter<OpenStateChanged> for PortPanel {}
 
 impl PortPanel {
     pub fn new(
@@ -252,7 +254,7 @@ impl PortPanel {
             return;
         }
         // 打开串口
-        self.open_state = true;
+        self.change_open_state(true, cx);
         let port = self.ports.open_port();
         if let Err(e) = port {
             tracing::error!("Failed to open port: {:?}", e);
@@ -263,7 +265,7 @@ impl PortPanel {
                     .button_props(DialogButtonProps::default().ok_text("关闭"))
                     .on_ok(|_, _window, _cx| true)
             });
-            self.open_state = false;
+            self.change_open_state(false, cx);
             return;
         }
 
@@ -287,7 +289,7 @@ impl PortPanel {
                     }
                     PortMessage::Error(msg) => {
                         let _ = port_panel.update(cx, |this, cx| {
-                            this.open_state = false;
+                            this.change_open_state(false, cx);
                             cx.emit(PortError { message: msg });
                             cx.notify();
                         });
@@ -313,7 +315,17 @@ impl PortPanel {
         // 等待关闭串口
         while self.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {}
 
-        self.open_state = false;
+        self.change_open_state(false, cx);
+        cx.notify();
+    }
+
+    pub fn change_open_state(&mut self, new_open_state: bool, cx: &mut Context<Self>) {
+        self.open_state = new_open_state;
+
+        cx.emit(OpenStateChanged {
+            open_state: new_open_state,
+        });
+
         cx.notify();
     }
 }

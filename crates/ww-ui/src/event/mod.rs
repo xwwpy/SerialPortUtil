@@ -8,3 +8,7 @@ pub struct ReceivedData {
 pub struct PortError {
     pub message: String,
 }
+
+pub struct OpenStateChanged {
+    pub open_state: bool,
+}

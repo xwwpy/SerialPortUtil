@@ -4,11 +4,13 @@ use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
     ParentElement, Render, Styled, Subscription, Window, actions, div, green, rgb, white,
 };
-use gpui_component::StyledExt;
+use gpui_component::button::Button;
 use gpui_component::checkbox::Checkbox;
 use gpui_component::input::{Copy, Input, InputState, RopeExt, SelectAll};
 use gpui_component::label::Label;
+use gpui_component::{Disableable, StyledExt, gray};
 
+use crate::event::OpenStateChanged;
 use crate::model::config_panel::Supported;
 use crate::ui_config;
 use crate::{event::ReceivedData, ui::port_panel::PortPanel};
@@ -18,10 +20,12 @@ actions!([ClearText]);
 pub struct IoPanel {
     window: AnyWindowHandle,
     input_state: Entity<InputState>,
+    output_state: Entity<InputState>,
     output_focus_handle: FocusHandle,
     input_focus_handle: FocusHandle,
     whether_auto_scroll_to_bottom: bool,
     whether_add_timestamp: bool,
+    port_open_state: bool,
     pub encoding: Supported,
     pub decoding: Supported,
     // 当前未完成行的流式解码器；Hex 模式为 None
@@ -31,6 +35,7 @@ pub struct IoPanel {
     // Hex 模式下当前行是否已有内容，用于控制字节间的空格
     line_has_bytes: bool,
     _receive_data_subscription: Option<Subscription>,
+    _open_state_observer_subscription: Option<Subscription>,
     new_line: bool,
     received_bytes: u64,
     max_lines: usize,
@@ -189,15 +194,40 @@ impl Render for IoPanel {
                     .rounded_md()
                     .child(
                         div()
+                            .flex()
                             .size_full()
                             .border_1()
                             .rounded_md()
+                            .p_2()
+                            .gap_4()
+                            .items_center()
+                            .overflow_hidden()
+                            .justify_evenly()
                             .track_focus(&self.input_focus_handle)
                             .when_else(
-                                self.input_focus_handle.is_focused(window),
+                                self.input_focus_handle.is_focused(window)
+                                    || self.output_state.focus_handle(cx).is_focused(window),
                                 |div| div.border_color(rgb(config.get_focus_border_color())),
                                 |div| div.border_color(rgb(config.get_default_border_color())),
-                            ),
+                            )
+                            .child(
+                                Input::new(&self.output_state)
+                                    .size_full()
+                                    .text_color(green())
+                                    .border_color(gray(100))
+                                    .context_menu(|menu, _window, _cx| {
+                                        menu.menu("复制", Box::new(Copy))
+                                            .separator()
+                                            .menu("全选", Box::new(SelectAll))
+                                            .separator()
+                                            .menu("清空文本", Box::new(ClearText))
+                                    }),
+                            )
+                            .child(Button::new("submit").label("发送").when_else(
+                                self.port_open_state,
+                                |btn| btn.cursor_pointer(),
+                                |btn| btn.disabled(true).cursor_not_allowed(),
+                            )),
                     ),
             )
     }
@@ -216,6 +246,14 @@ impl IoPanel {
             },
         );
 
+        let open_state_subscription = cx.subscribe(
+            &port_panel,
+            |this, _port_panel, open_state: &OpenStateChanged, cx| {
+                this.port_open_state = open_state.open_state;
+                cx.notify();
+            },
+        );
+
         let config = ui_config::get().get_common_config();
         let decoding: Supported = config.get_decoding().into();
 
@@ -225,9 +263,15 @@ impl IoPanel {
             state.set_soft_wrap(true, window, cx);
         });
 
+        let output_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
+        output_state.update(cx, |state, cx| {
+            state.set_soft_wrap(true, window, cx);
+        });
+
         IoPanel {
             window: window.window_handle(),
             input_state,
+            output_state,
             output_focus_handle: cx.focus_handle(),
             input_focus_handle: cx.focus_handle(),
             whether_auto_scroll_to_bottom: true,
@@ -240,6 +284,8 @@ impl IoPanel {
             line_has_bytes: false,
             new_line: true,
             _receive_data_subscription: Some(subscription),
+            _open_state_observer_subscription: Some(open_state_subscription),
+            port_open_state: false,
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
             received_bytes: 0,
@@ -371,14 +417,13 @@ impl IoPanel {
                 self.trim_to_max_lines(state, window, cx);
 
                 let len = state.text().len();
-                if auto_scroll {
-                    // 移动光标到末尾并滚动到底部
-                    let position = state.text().offset_to_position(len);
-                    state.set_cursor_position(position, window, cx);
-                } else {
-                    // 裁剪会把光标移到开头，这里移回末尾，避免下次 insert 插到开头；
-                    // 同时恢复裁剪前的滚动位置
-                    state.set_selected_range(len..len, cx);
+                // 修复原来的 set_cursor_position 一直主动聚焦自身的bug
+
+                state.set_selected_range(len..len, cx);
+
+                if !auto_scroll {
+                    // 裁剪会把光标移到开头，这里恢复裁剪前的滚动位置；
+                    // 光标已移回末尾，避免下次 insert 插到开头。
                     state.set_scroll_offset(saved_scroll, cx);
                 }
             });

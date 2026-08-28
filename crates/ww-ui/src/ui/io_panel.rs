@@ -38,13 +38,17 @@ pub struct IoPanel {
     pub decoding: Supported,
     // 当前的流式解码器；Hex 模式为 None
     pub decoder: Option<Decoder>,
-    // Hex 模式下当前行是否已有内容，用于控制字节间的空格
-    line_has_bytes: bool,
+
     _receive_data_subscription: Option<Subscription>,
     _open_state_observer_subscription: Option<Subscription>,
-    new_line: bool,
-    received_bytes: u64,
-    max_lines: usize,
+    port_input_new_line: bool,
+    port_input_received_bytes: u64,
+    port_input_max_lines: usize,
+    // Hex 模式下当前行是否已有内容，用于控制字节间的空格
+    port_input_line_has_bytes: bool,
+
+    user_input_max_line: usize,
+    user_input_line_has_bytes: bool,
     simple_time_show: bool,
     pub _encoding_changed_subscription: Option<Subscription>,
     pub _decoding_changed_subscription: Option<Subscription>,
@@ -251,9 +255,9 @@ impl Render for IoPanel {
                                         )
                                         .text_color(green()),
                                     )
-                                    .child(Label::new(format!("/{}-", self.max_lines)))
+                                    .child(Label::new(format!("/{}-", self.port_input_max_lines)))
                                     .child(
-                                        Label::new(self.received_bytes.to_string())
+                                        Label::new(self.port_input_received_bytes.to_string())
                                             .text_color(green()),
                                     )
                                     .child(Label::new("个字节")),
@@ -309,7 +313,34 @@ impl Render for IoPanel {
                                     )
                                     .on_click(cx.listener(|this, _event, window, cx| {
                                         this.focus_user_input(window, cx);
-                                        // TODO
+
+                                        let user_input = this.user_input_state.read(cx).value();
+                                        let mut content_to_show = user_input.to_string();
+                                        if this.whether_add_timestamp {
+                                            if this.simple_time_show {
+                                                content_to_show = format!(
+                                                    "{}",
+                                                    jiff::Zoned::now().strftime("%H:%M:%S%.3f: ")
+                                                );
+                                            } else {
+                                                content_to_show = format!(
+                                                    "{}",
+                                                    jiff::Zoned::now()
+                                                        .strftime("%Y-%m-%d %H:%M:%S%.3f: ")
+                                                );
+                                            }
+                                            content_to_show.push_str(&user_input);
+                                        }
+
+                                        // 窗口已经在更新栈中，不能再使用window_handle.update
+                                        Self::insert_text_without_window_handle(
+                                            content_to_show,
+                                            cx,
+                                            this.user_input_show_state.clone(),
+                                            this.whether_auto_scroll_to_bottom,
+                                            window,
+                                            this.user_input_max_line,
+                                        );
                                     })),
                             ),
                     ),
@@ -384,15 +415,20 @@ impl IoPanel {
             encoder: encoding.encoding().map(|e| e.new_encoder()),
             decoding,
             decoder: decoding.encoding().map(|e| e.new_decoder()),
-            line_has_bytes: false,
-            new_line: true,
+
             _receive_data_subscription: Some(subscription),
             _open_state_observer_subscription: Some(open_state_subscription),
             port_open_state: false,
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
-            received_bytes: 0,
-            max_lines: ui_config::get().get_common_config().get_max_lines(),
+
+            port_input_new_line: true,
+            port_input_received_bytes: 0,
+            port_input_max_lines: ui_config::get().get_common_config().get_max_lines(),
+            port_input_line_has_bytes: false,
+
+            user_input_max_line: ui_config::get().get_common_config().get_max_lines(),
+            user_input_line_has_bytes: false,
         }
     }
 
@@ -409,7 +445,7 @@ impl IoPanel {
         });
 
         self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
-        self.line_has_bytes = false;
+        self.port_input_line_has_bytes = false;
     }
 
     fn clear_user_input_text(
@@ -436,6 +472,7 @@ impl IoPanel {
         user_input_show_state.update(cx, |state, cx| {
             state.set_value("", window, cx);
         });
+        self.user_input_line_has_bytes = false;
     }
 
     fn focus_info_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -447,12 +484,12 @@ impl IoPanel {
     }
 
     pub fn resolve_port_input_data(&mut self, datas: &[u8], cx: &mut Context<Self>) {
-        self.received_bytes += datas.len() as u64;
+        self.port_input_received_bytes += datas.len() as u64;
 
         let mut pending = String::new();
 
         for &byte in datas {
-            if self.whether_add_timestamp && self.new_line {
+            if self.whether_add_timestamp && self.port_input_new_line {
                 pending.push_str(&format!(
                     "{} ",
                     if self.simple_time_show {
@@ -461,20 +498,20 @@ impl IoPanel {
                         jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S%.3f: ")
                     }
                 ));
-                self.new_line = false;
+                self.port_input_new_line = false;
             }
             match byte {
                 b'\n' => {
                     // 当前行完成：刷新解码器残留内容，然后追加换行
                     self.finish_port_input_line(&mut pending);
                     pending.push('\n');
-                    self.line_has_bytes = false;
+                    self.port_input_line_has_bytes = false;
                 }
                 b'\r' => {
-                    self.new_line = false;
+                    self.port_input_new_line = false;
                 }
                 _ => {
-                    self.new_line = false;
+                    self.port_input_new_line = false;
                     // 追加到当前未完成行
                     match &mut self.decoder {
                         Some(decoder) => {
@@ -484,11 +521,11 @@ impl IoPanel {
                         }
                         None => {
                             // Hex 显示：字节之间增加一个空格
-                            if self.line_has_bytes {
+                            if self.port_input_line_has_bytes {
                                 pending.push(' ');
                             }
                             pending.push_str(&format!("{:02X}", byte));
-                            self.line_has_bytes = true;
+                            self.port_input_line_has_bytes = true;
                         }
                     }
                 }
@@ -502,7 +539,7 @@ impl IoPanel {
                 self.port_input_state.clone(),
                 self.whether_auto_scroll_to_bottom,
                 self.window,
-                self.max_lines,
+                self.port_input_max_lines,
             );
             // 限制最大行数，超出后释放最前面的文本
         }
@@ -519,7 +556,39 @@ impl IoPanel {
         // last=true 会把解码器置为 Finished，必须重新创建新解码器，
         // 否则下一次 decode_to_string 会 panic（Must not use a decoder that has finished）
         self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
-        self.new_line = true;
+        self.port_input_new_line = true;
+    }
+
+    /// 将用户输入按发送编码解析为字节数据并返回。
+    ///
+    /// - 非 Hex 编码：直接按对应编码把文本编码成字节。
+    /// - Hex 编码：输入是十六进制字节串，空格等空白字符仅作为分隔符，不参与解析。
+    /// TODO 将解析好的数据发送给串口
+    pub fn resolve_user_input_data(&self, datas: &str) -> Vec<u8> {
+        match self.encoding.encoding() {
+            Some(enc) => enc.encode(datas).0.into_owned(),
+            None => {
+                let mut out = Vec::new();
+                let mut high: Option<u8> = None;
+                for c in datas.chars() {
+                    // 空白字符作为分隔符，直接跳过
+                    if c.is_whitespace() {
+                        continue;
+                    }
+                    if let Some(n) = c.to_digit(16) {
+                        match high.take() {
+                            Some(h) => out.push((h << 4) | n as u8),
+                            None => high = Some(n as u8),
+                        }
+                    }
+                    // 其他非十六进制字符忽略
+                }
+                if let Some(h) = high {
+                    out.push(h << 4);
+                }
+                out
+            }
+        }
     }
 
     fn trim_to_max_lines(
@@ -573,7 +642,36 @@ impl IoPanel {
                     // 光标已移回末尾，避免下次 insert 插到开头。
                     state.set_scroll_offset(saved_scroll, cx);
                 }
+                cx.notify();
             });
+        });
+    }
+
+    fn insert_text_without_window_handle(
+        text: String,
+        cx: &mut Context<Self>,
+        target_state: Entity<InputState>,
+        whether_auto_scroll_to_bottom: bool,
+        window: &mut Window,
+        max_lines: usize,
+    ) {
+        target_state.update(cx, |state, cx| {
+            let saved_scroll = state.scroll_offset();
+
+            state.insert(text, window, cx);
+            Self::trim_to_max_lines(state, window, cx, max_lines);
+
+            let len = state.text().len();
+
+            // 修复原来的 set_cursor_position 一直主动聚焦自身的bug
+            state.set_selected_range(len..len, cx);
+
+            if !whether_auto_scroll_to_bottom {
+                // 裁剪会把光标移到开头，这里恢复裁剪前的滚动位置；
+                // 光标已移回末尾，避免下次 insert 插到开头。
+                state.set_scroll_offset(saved_scroll, cx);
+            }
+            cx.notify();
         });
     }
 }

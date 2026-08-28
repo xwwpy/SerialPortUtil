@@ -2,7 +2,7 @@ use encoding_rs::Decoder;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
-    ParentElement, Render, Styled, Subscription, Window, actions, div, green, rgb, white,
+    ParentElement, Render, Styled, Subscription, Window, actions, blue, div, green, rgb, white,
 };
 use gpui_component::button::Button;
 use gpui_component::checkbox::Checkbox;
@@ -15,12 +15,17 @@ use crate::model::config_panel::Supported;
 use crate::ui_config;
 use crate::{event::ReceivedData, ui::port_panel::PortPanel};
 
-actions!([ClearPortInputText, ClearUserInputText]);
+actions!([ClearPortInputText, ClearUserInputText, ClearUserShowText]);
 
 pub struct IoPanel {
     window: AnyWindowHandle,
-    port_input_state: Entity<InputState>,
+    port_input_state: Entity<InputState>, // 端口输入内容展示面板
+    user_input_show_state: Entity<InputState>, // 用户输入内容展示面板
     user_input_state: Entity<InputState>,
+
+    show_port_input_content: bool,
+    show_user_input_content: bool,
+
     port_input_focus_handle: FocusHandle,
     user_input_focus_handle: FocusHandle,
     info_config_focus_handle: FocusHandle,
@@ -58,11 +63,14 @@ impl Render for IoPanel {
             .gap_4()
             .p_2()
             .size_full()
-            .on_action(cx.listener(Self::clear_input_text))
-            .on_action(cx.listener(Self::clear_output_text))
+            .on_action(cx.listener(Self::clear_port_input_text))
+            .on_action(cx.listener(Self::clear_user_input_text))
+            .on_action(cx.listener(Self::clear_user_input_show_text))
             // output view
             .child(
                 div()
+                    .flex()
+                    .gap_2()
                     .h_2_3()
                     .p_2()
                     .bg(white())
@@ -70,31 +78,54 @@ impl Render for IoPanel {
                     .rounded_md()
                     .child(
                         div()
+                            .flex()
                             .size_full()
                             .flex_grow_0()
                             .rounded_md()
                             .p_2()
+                            .gap_2()
                             .track_focus(&self.port_input_focus_handle)
                             .border_1()
                             .when_else(
                                 self.port_input_focus_handle.is_focused(window)
-                                    || self.port_input_state.focus_handle(cx).is_focused(window),
+                                    || self.port_input_state.focus_handle(cx).is_focused(window)
+                                    || self
+                                        .user_input_show_state
+                                        .focus_handle(cx)
+                                        .is_focused(window),
                                 |div| div.border_color(rgb(config.get_focus_border_color())),
                                 |div| div.border_color(rgb(config.get_default_border_color())),
                             )
-                            .child(
-                                Input::new(&self.port_input_state)
-                                    .size_full()
-                                    .disabled(true)
-                                    .text_color(green())
-                                    .context_menu(|menu, _window, _cx| {
-                                        menu.menu("复制", Box::new(Copy))
-                                            .separator()
-                                            .menu("全选", Box::new(SelectAll))
-                                            .separator()
-                                            .menu("清空文本", Box::new(ClearPortInputText))
-                                    }),
-                            ),
+                            .when(self.show_port_input_content, |div| {
+                                div.child(
+                                    Input::new(&self.port_input_state)
+                                        .h_full()
+                                        .disabled(true)
+                                        .text_color(green())
+                                        .context_menu(|menu, _window, _cx| {
+                                            menu.menu("复制", Box::new(Copy))
+                                                .separator()
+                                                .menu("全选", Box::new(SelectAll))
+                                                .separator()
+                                                .menu("清空文本", Box::new(ClearPortInputText))
+                                        }),
+                                )
+                            })
+                            .when(self.show_user_input_content, |div| {
+                                div.child(
+                                    Input::new(&self.user_input_show_state)
+                                        .h_full()
+                                        .disabled(true)
+                                        .text_color(blue())
+                                        .context_menu(|menu, _window, _cx| {
+                                            menu.menu("复制", Box::new(Copy))
+                                                .separator()
+                                                .menu("全选", Box::new(SelectAll))
+                                                .separator()
+                                                .menu("清空文本", Box::new(ClearUserShowText))
+                                        }),
+                                )
+                            }),
                     ),
             )
             // info view
@@ -281,7 +312,14 @@ impl IoPanel {
         // 创建只读的文本编辑器，用于展示接收数据
         let port_input_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
         port_input_state.update(cx, |state, cx| {
-            state.set_placeholder(io_panel_config.get_input_placeholder(), window, cx);
+            state.set_placeholder(io_panel_config.get_port_input_placeholder(), window, cx);
+
+            state.set_soft_wrap(true, window, cx);
+        });
+
+        let user_input_show_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
+        user_input_show_state.update(cx, |state, cx| {
+            state.set_placeholder(io_panel_config.get_user_input_placeholder(), window, cx);
 
             state.set_soft_wrap(true, window, cx);
         });
@@ -296,8 +334,11 @@ impl IoPanel {
         IoPanel {
             window: window.window_handle(),
             port_input_state,
+            user_input_show_state,
             user_input_state,
             port_input_focus_handle: cx.focus_handle(),
+            show_port_input_content: true,
+            show_user_input_content: false,
             user_input_focus_handle: cx.focus_handle(),
             info_config_focus_handle: cx.focus_handle(),
             whether_auto_scroll_to_bottom: true,
@@ -319,15 +360,15 @@ impl IoPanel {
         }
     }
 
-    fn clear_input_text(
+    fn clear_port_input_text(
         &mut self,
         _: &ClearPortInputText,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         // 清空显示内容，并重置当前行的解码状态
-        let input_state = self.port_input_state.clone();
-        input_state.update(cx, |state, cx| {
+        let port_input_state = self.port_input_state.clone();
+        port_input_state.update(cx, |state, cx| {
             state.set_value("", window, cx);
         });
 
@@ -336,15 +377,28 @@ impl IoPanel {
         self.line_has_bytes = false;
     }
 
-    fn clear_output_text(
+    fn clear_user_input_text(
         &mut self,
         _: &ClearUserInputText,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // 清空显示内容，并重置当前行的解码状态
-        let output_state = self.user_input_state.clone();
-        output_state.update(cx, |state, cx| {
+        // 清空显示内容
+        let user_input_state = self.user_input_state.clone();
+        user_input_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+        });
+    }
+
+    fn clear_user_input_show_text(
+        &mut self,
+        _: &ClearUserInputText,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // 清空显示内容
+        let user_input_show_state = self.user_input_show_state.clone();
+        user_input_show_state.update(cx, |state, cx| {
             state.set_value("", window, cx);
         });
     }
@@ -469,8 +523,8 @@ impl IoPanel {
                 self.trim_to_max_lines(state, window, cx);
 
                 let len = state.text().len();
-                // 修复原来的 set_cursor_position 一直主动聚焦自身的bug
 
+                // 修复原来的 set_cursor_position 一直主动聚焦自身的bug
                 state.set_selected_range(len..len, cx);
 
                 if !auto_scroll {

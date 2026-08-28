@@ -136,7 +136,8 @@ impl CommonConfig {
 #[serde(rename_all = "lowercase")]
 pub struct IoPanelConfig {
     pub default_output: Option<String>,
-    pub input_placeholder: Option<String>,
+    pub port_input_placeholder: Option<String>,
+    pub user_input_placeholder: Option<String>,
 }
 
 impl IoPanelConfig {
@@ -147,8 +148,15 @@ impl IoPanelConfig {
         })
     }
 
-    pub fn get_input_placeholder(&self) -> String {
-        self.input_placeholder.clone().unwrap_or_else(|| {
+    pub fn get_port_input_placeholder(&self) -> String {
+        self.port_input_placeholder.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置端口输入占位符，使用默认值：");
+            "".to_string()
+        })
+    }
+
+    pub fn get_user_input_placeholder(&self) -> String {
+        self.user_input_placeholder.clone().unwrap_or_else(|| {
             tracing::info!("没有配置用户输入占位符，使用默认值：");
             "".to_string()
         })

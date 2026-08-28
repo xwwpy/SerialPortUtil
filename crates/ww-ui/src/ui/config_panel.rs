@@ -61,6 +61,7 @@ impl Render for ConfigPanel {
                             .flex()
                             .w_full()
                             .items_center()
+                            .overflow_hidden()
                             .child(
                                 Label::new("选择字体：")
                                     .w(px(100.))
@@ -82,6 +83,7 @@ impl Render for ConfigPanel {
                             .flex()
                             .w_full()
                             .items_center()
+                            .overflow_hidden()
                             .child(
                                 Label::new("接收编码：")
                                     .w(px(100.))
@@ -103,6 +105,7 @@ impl Render for ConfigPanel {
                             .flex()
                             .w_full()
                             .items_center()
+                            .overflow_hidden()
                             .child(
                                 Label::new("发送编码：")
                                     .w(px(100.))

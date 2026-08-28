@@ -112,6 +112,7 @@ impl Render for IoPanel {
                                 div()
                                     .h_flex()
                                     .items_center()
+                                    .overflow_hidden()
                                     .child(Label::new("自动滚动到底部："))
                                     .child(
                                         Checkbox::new("auto_scroll_to_button")
@@ -127,6 +128,7 @@ impl Render for IoPanel {
                                 div()
                                     .h_flex()
                                     .items_center()
+                                    .overflow_hidden()
                                     .child(Label::new("添加时间戳："))
                                     .child(
                                         Checkbox::new("add_timestamp")
@@ -142,6 +144,7 @@ impl Render for IoPanel {
                                 div()
                                     .h_flex()
                                     .items_center()
+                                    .overflow_hidden()
                                     .child(Label::new("精简时间："))
                                     .child(
                                         Checkbox::new("simple_time_show")
@@ -157,6 +160,7 @@ impl Render for IoPanel {
                                 div()
                                     .h_flex()
                                     .items_center()
+                                    .overflow_hidden()
                                     .child(
                                         Label::new(
                                             // 去掉默认的一行
@@ -360,14 +364,21 @@ impl IoPanel {
 
         let _ = window.update(cx, |_, window, cx| {
             input_state.update(cx, |state, cx| {
+                let saved_scroll = state.scroll_offset();
+
                 state.insert(text, window, cx);
                 self.trim_to_max_lines(state, window, cx);
 
-                // 自动滚动到底部
+                let len = state.text().len();
                 if auto_scroll {
-                    let len = state.text().len();
+                    // 移动光标到末尾并滚动到底部
                     let position = state.text().offset_to_position(len);
                     state.set_cursor_position(position, window, cx);
+                } else {
+                    // 裁剪会把光标移到开头，这里移回末尾，避免下次 insert 插到开头；
+                    // 同时恢复裁剪前的滚动位置
+                    state.set_selected_range(len..len, cx);
+                    state.set_scroll_offset(saved_scroll, cx);
                 }
             });
         });

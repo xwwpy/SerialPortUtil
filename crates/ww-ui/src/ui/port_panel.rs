@@ -421,6 +421,7 @@ impl Render for PortPanel {
                                 .flex()
                                 .w_full()
                                 .items_center()
+                                .overflow_hidden()
                                 .child(
                                     Label::new("串口号：")
                                         .w(px(100.))
@@ -449,6 +450,7 @@ impl Render for PortPanel {
                                 .flex()
                                 .w_full()
                                 .items_center()
+                                .overflow_hidden()
                                 .child(
                                     Label::new("波特率：")
                                         .w(px(100.))
@@ -475,6 +477,7 @@ impl Render for PortPanel {
                                 .flex()
                                 .w_full()
                                 .items_center()
+                                .overflow_hidden()
                                 .child(
                                     Label::new("校验位：")
                                         .w(px(100.))
@@ -501,6 +504,7 @@ impl Render for PortPanel {
                                 .flex()
                                 .w_full()
                                 .items_center()
+                                .overflow_hidden()
                                 .child(
                                     Label::new("数据位数：")
                                         .w(px(100.))
@@ -527,6 +531,7 @@ impl Render for PortPanel {
                                 .flex()
                                 .w_full()
                                 .items_center()
+                                .overflow_hidden()
                                 .child(
                                     Label::new("停止位数：")
                                         .w(px(100.))

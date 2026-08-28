@@ -134,6 +134,29 @@ impl CommonConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
+pub struct IoPanelConfig {
+    pub default_output: Option<String>,
+    pub input_placeholder: Option<String>,
+}
+
+impl IoPanelConfig {
+    pub fn get_default_output(&self) -> String {
+        self.default_output.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置默认串口发送数据为空的占位值，使用默认值：");
+            "".to_string()
+        })
+    }
+
+    pub fn get_input_placeholder(&self) -> String {
+        self.input_placeholder.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置用户输入占位符，使用默认值：");
+            "".to_string()
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
 pub struct AuthorInfoConfig {
     author_name: Option<String>,
     author_email: Option<String>,
@@ -162,6 +185,7 @@ pub struct UIConfig {
     log_config: LogConfig,
     author_info: AuthorInfoConfig,
     port_panel_config: PortPanelConfig,
+    io_panel_config: IoPanelConfig,
     common_config: CommonConfig,
 }
 
@@ -181,6 +205,10 @@ impl UIConfig {
 
     pub fn get_port_panel_config(&self) -> &PortPanelConfig {
         &self.port_panel_config
+    }
+
+    pub fn get_io_panel_config(&self) -> &IoPanelConfig {
+        &self.io_panel_config
     }
 
     pub fn get_common_config(&self) -> &CommonConfig {

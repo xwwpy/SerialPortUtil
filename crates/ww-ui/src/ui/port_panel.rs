@@ -328,6 +328,10 @@ impl PortPanel {
 
         cx.notify();
     }
+
+    fn focus_open_port_info(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.port_open_focus_handle.focus(window, cx);
+    }
 }
 
 impl Render for PortPanel {
@@ -383,6 +387,7 @@ impl Render for PortPanel {
                                         } else {
                                             this.open_port(cx, window);
                                         }
+                                        this.focus_open_port_info(window, cx);
                                         cx.notify();
                                     }))
                                     .rounded_full()

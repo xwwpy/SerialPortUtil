@@ -15,14 +15,15 @@ use crate::model::config_panel::Supported;
 use crate::ui_config;
 use crate::{event::ReceivedData, ui::port_panel::PortPanel};
 
-actions!([ClearText]);
+actions!([ClearPortInputText, ClearUserInputText]);
 
 pub struct IoPanel {
     window: AnyWindowHandle,
-    input_state: Entity<InputState>,
-    output_state: Entity<InputState>,
-    output_focus_handle: FocusHandle,
-    input_focus_handle: FocusHandle,
+    port_input_state: Entity<InputState>,
+    user_input_state: Entity<InputState>,
+    port_input_focus_handle: FocusHandle,
+    user_input_focus_handle: FocusHandle,
+    info_config_focus_handle: FocusHandle,
     whether_auto_scroll_to_bottom: bool,
     whether_add_timestamp: bool,
     port_open_state: bool,
@@ -57,7 +58,8 @@ impl Render for IoPanel {
             .gap_4()
             .p_2()
             .size_full()
-            .on_action(cx.listener(Self::clear_text))
+            .on_action(cx.listener(Self::clear_input_text))
+            .on_action(cx.listener(Self::clear_output_text))
             // output view
             .child(
                 div()
@@ -72,16 +74,16 @@ impl Render for IoPanel {
                             .flex_grow_0()
                             .rounded_md()
                             .p_2()
-                            .track_focus(&self.output_focus_handle)
+                            .track_focus(&self.port_input_focus_handle)
                             .border_1()
                             .when_else(
-                                self.output_focus_handle.is_focused(window)
-                                    || self.input_state.focus_handle(cx).is_focused(window),
+                                self.port_input_focus_handle.is_focused(window)
+                                    || self.port_input_state.focus_handle(cx).is_focused(window),
                                 |div| div.border_color(rgb(config.get_focus_border_color())),
                                 |div| div.border_color(rgb(config.get_default_border_color())),
                             )
                             .child(
-                                Input::new(&self.input_state)
+                                Input::new(&self.port_input_state)
                                     .size_full()
                                     .disabled(true)
                                     .text_color(green())
@@ -90,7 +92,7 @@ impl Render for IoPanel {
                                             .separator()
                                             .menu("全选", Box::new(SelectAll))
                                             .separator()
-                                            .menu("清空文本", Box::new(ClearText))
+                                            .menu("清空文本", Box::new(ClearPortInputText))
                                     }),
                             ),
                     ),
@@ -98,7 +100,6 @@ impl Render for IoPanel {
             // info view
             .child(
                 div()
-                    .h(window.rem_size() * 2.)
                     .flex_grow_0()
                     .p_2()
                     .bg(white())
@@ -111,6 +112,13 @@ impl Render for IoPanel {
                             .items_center()
                             .justify_evenly()
                             .p_2()
+                            .border_1()
+                            .track_focus(&self.info_config_focus_handle)
+                            .when_else(
+                                self.info_config_focus_handle.is_focused(window),
+                                |div| div.border_color(rgb(config.get_focus_border_color())),
+                                |div| div.border_color(rgb(config.get_default_border_color())),
+                            )
                             .gap_4()
                             .text_sm()
                             .rounded_md()
@@ -123,8 +131,9 @@ impl Render for IoPanel {
                                     .child(
                                         Checkbox::new("auto_scroll_to_button")
                                             .checked(self.whether_auto_scroll_to_bottom)
-                                            .on_click(cx.listener(|this, checked, _window, cx| {
+                                            .on_click(cx.listener(|this, checked, window, cx| {
                                                 this.whether_auto_scroll_to_bottom = *checked;
+                                                this.focus_info_config(window, cx);
                                                 cx.notify();
                                             }))
                                             .cursor_pointer(),
@@ -139,8 +148,9 @@ impl Render for IoPanel {
                                     .child(
                                         Checkbox::new("add_timestamp")
                                             .checked(self.whether_add_timestamp)
-                                            .on_click(cx.listener(|this, checked, _window, cx| {
+                                            .on_click(cx.listener(|this, checked, window, cx| {
                                                 this.whether_add_timestamp = *checked;
+                                                this.focus_info_config(window, cx);
                                                 cx.notify();
                                             }))
                                             .cursor_pointer(),
@@ -155,8 +165,9 @@ impl Render for IoPanel {
                                     .child(
                                         Checkbox::new("simple_time_show")
                                             .checked(self.simple_time_show)
-                                            .on_click(cx.listener(|this, checked, _window, cx| {
+                                            .on_click(cx.listener(|this, checked, window, cx| {
                                                 this.simple_time_show = *checked;
+                                                this.focus_info_config(window, cx);
                                                 cx.notify();
                                             }))
                                             .cursor_pointer(),
@@ -170,7 +181,7 @@ impl Render for IoPanel {
                                     .child(
                                         Label::new(
                                             // 去掉默认的一行
-                                            (self.input_state.read(cx).text().lines_len() - 1)
+                                            (self.port_input_state.read(cx).text().lines_len() - 1)
                                                 .to_string(),
                                         )
                                         .text_color(green()),
@@ -203,15 +214,15 @@ impl Render for IoPanel {
                             .items_center()
                             .overflow_hidden()
                             .justify_evenly()
-                            .track_focus(&self.input_focus_handle)
+                            .track_focus(&self.user_input_focus_handle)
                             .when_else(
-                                self.input_focus_handle.is_focused(window)
-                                    || self.output_state.focus_handle(cx).is_focused(window),
+                                self.user_input_focus_handle.is_focused(window)
+                                    || self.user_input_state.focus_handle(cx).is_focused(window),
                                 |div| div.border_color(rgb(config.get_focus_border_color())),
                                 |div| div.border_color(rgb(config.get_default_border_color())),
                             )
                             .child(
-                                Input::new(&self.output_state)
+                                Input::new(&self.user_input_state)
                                     .size_full()
                                     .text_color(green())
                                     .border_color(gray(100))
@@ -220,14 +231,22 @@ impl Render for IoPanel {
                                             .separator()
                                             .menu("全选", Box::new(SelectAll))
                                             .separator()
-                                            .menu("清空文本", Box::new(ClearText))
+                                            .menu("清空文本", Box::new(ClearUserInputText))
                                     }),
                             )
-                            .child(Button::new("submit").label("发送").when_else(
-                                self.port_open_state,
-                                |btn| btn.cursor_pointer(),
-                                |btn| btn.disabled(true).cursor_not_allowed(),
-                            )),
+                            .child(
+                                Button::new("submit")
+                                    .label("发送")
+                                    .when_else(
+                                        self.port_open_state,
+                                        |btn| btn.cursor_pointer(),
+                                        |btn| btn.disabled(true).cursor_not_allowed(),
+                                    )
+                                    .on_click(cx.listener(|this, _event, window, cx| {
+                                        this.focus_user_input(window, cx);
+                                        // TODO
+                                    })),
+                            ),
                     ),
             )
     }
@@ -257,23 +276,30 @@ impl IoPanel {
         let config = ui_config::get().get_common_config();
         let decoding: Supported = config.get_decoding().into();
 
+        let io_panel_config = ui_config::get().get_io_panel_config();
+
         // 创建只读的文本编辑器，用于展示接收数据
-        let input_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
-        input_state.update(cx, |state, cx| {
+        let port_input_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
+        port_input_state.update(cx, |state, cx| {
+            state.set_placeholder(io_panel_config.get_input_placeholder(), window, cx);
+
             state.set_soft_wrap(true, window, cx);
         });
 
-        let output_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
-        output_state.update(cx, |state, cx| {
+        let user_input_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
+        user_input_state.update(cx, |state, cx| {
+            state.set_value(io_panel_config.get_default_output(), window, cx);
+
             state.set_soft_wrap(true, window, cx);
         });
 
         IoPanel {
             window: window.window_handle(),
-            input_state,
-            output_state,
-            output_focus_handle: cx.focus_handle(),
-            input_focus_handle: cx.focus_handle(),
+            port_input_state,
+            user_input_state,
+            port_input_focus_handle: cx.focus_handle(),
+            user_input_focus_handle: cx.focus_handle(),
+            info_config_focus_handle: cx.focus_handle(),
             whether_auto_scroll_to_bottom: true,
             whether_add_timestamp: true,
             simple_time_show: true,
@@ -293,9 +319,14 @@ impl IoPanel {
         }
     }
 
-    fn clear_text(&mut self, _: &ClearText, window: &mut Window, cx: &mut Context<Self>) {
+    fn clear_input_text(
+        &mut self,
+        _: &ClearPortInputText,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // 清空显示内容，并重置当前行的解码状态
-        let input_state = self.input_state.clone();
+        let input_state = self.port_input_state.clone();
         input_state.update(cx, |state, cx| {
             state.set_value("", window, cx);
         });
@@ -303,6 +334,27 @@ impl IoPanel {
         self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
         self.decoder_encoding = self.decoding;
         self.line_has_bytes = false;
+    }
+
+    fn clear_output_text(
+        &mut self,
+        _: &ClearUserInputText,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // 清空显示内容，并重置当前行的解码状态
+        let output_state = self.user_input_state.clone();
+        output_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+        });
+    }
+
+    fn focus_info_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.info_config_focus_handle.focus(window, cx);
+    }
+
+    fn focus_user_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.user_input_focus_handle.focus(window, cx);
     }
 
     pub fn resolve_data(&mut self, datas: &[u8], cx: &mut Context<Self>) {
@@ -407,10 +459,10 @@ impl IoPanel {
     fn insert_text(&mut self, text: String, cx: &mut Context<Self>) {
         let auto_scroll = self.whether_auto_scroll_to_bottom;
         let window = self.window;
-        let input_state = self.input_state.clone();
+        let port_input_state = self.port_input_state.clone();
 
         let _ = window.update(cx, |_, window, cx| {
-            input_state.update(cx, |state, cx| {
+            port_input_state.update(cx, |state, cx| {
                 let saved_scroll = state.scroll_offset();
 
                 state.insert(text, window, cx);

@@ -10,6 +10,10 @@ author_info:
   author_name: ww
   author_email: 000000@qq.com
 
+io_panel_config:
+  default_output: Hello World!
+  input_placeholder: "未收到任何数据..."
+
 port_panel_config:
   baud_rate_default_vec: [1200, 2400, 4800, 9600, 19200, 38400, 57600, 74800, 115200, 230400, 460800, 921600, 1000000, 1152000, 1500000, 2000000, 2500000, 3000000, 3500000, 4000000]
   default_baud_rate: 115200

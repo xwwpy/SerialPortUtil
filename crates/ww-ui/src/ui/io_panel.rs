@@ -158,6 +158,40 @@ impl Render for IoPanel {
                                     .h_flex()
                                     .items_center()
                                     .overflow_hidden()
+                                    .child(Label::new("Rx："))
+                                    .child(
+                                        Checkbox::new("WhetherShowRxData")
+                                            .checked(self.show_port_input_content)
+                                            .on_click(cx.listener(|this, checked, window, cx| {
+                                                this.show_port_input_content = *checked;
+                                                this.focus_info_config(window, cx);
+                                                cx.notify();
+                                            }))
+                                            .cursor_pointer(),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .h_flex()
+                                    .items_center()
+                                    .overflow_hidden()
+                                    .child(Label::new("Tx："))
+                                    .child(
+                                        Checkbox::new("WhetherShowTxData")
+                                            .checked(self.show_user_input_content)
+                                            .on_click(cx.listener(|this, checked, window, cx| {
+                                                this.show_user_input_content = *checked;
+                                                this.focus_info_config(window, cx);
+                                                cx.notify();
+                                            }))
+                                            .cursor_pointer(),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .h_flex()
+                                    .items_center()
+                                    .overflow_hidden()
                                     .child(Label::new("自动滚动到底部："))
                                     .child(
                                         Checkbox::new("auto_scroll_to_button")
@@ -292,7 +326,7 @@ impl IoPanel {
         let subscription = cx.subscribe(
             &port_panel,
             |this, _port_panel, datas: &ReceivedData, cx| {
-                this.resolve_data(&datas.data, cx);
+                this.resolve_port_input_data(&datas.data, cx);
             },
         );
 
@@ -412,7 +446,7 @@ impl IoPanel {
         self.user_input_focus_handle.focus(window, cx);
     }
 
-    pub fn resolve_data(&mut self, datas: &[u8], cx: &mut Context<Self>) {
+    pub fn resolve_port_input_data(&mut self, datas: &[u8], cx: &mut Context<Self>) {
         self.received_bytes += datas.len() as u64;
 
         let mut pending = String::new();
@@ -432,7 +466,7 @@ impl IoPanel {
             match byte {
                 b'\n' => {
                     // 当前行完成：刷新解码器残留内容，然后追加换行
-                    self.finish_line(&mut pending);
+                    self.finish_port_input_line(&mut pending);
                     pending.push('\n');
                     self.line_has_bytes = false;
                 }
@@ -462,24 +496,44 @@ impl IoPanel {
         }
 
         if !pending.is_empty() {
-            self.insert_text(pending, cx);
+            Self::insert_text(
+                pending,
+                cx,
+                self.port_input_state.clone(),
+                self.whether_auto_scroll_to_bottom,
+                self.window,
+                self.max_lines,
+            );
             // 限制最大行数，超出后释放最前面的文本
         }
         cx.notify();
     }
 
+    /// 结束当前未完成行：将解码器中残留的不完整字节刷新为文本，并创建新的解码器
+    fn finish_port_input_line(&mut self, pending: &mut String) {
+        if let Some(ref mut decoder) = self.decoder {
+            // flush 可能写入 U+FFFD（3 字节），预留空间避免越界 panic
+            pending.reserve(16);
+            let _ = decoder.decode_to_string(&[], pending, true);
+        }
+        // last=true 会把解码器置为 Finished，必须重新创建新解码器，
+        // 否则下一次 decode_to_string 会 panic（Must not use a decoder that has finished）
+        self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
+        self.new_line = true;
+    }
+
     fn trim_to_max_lines(
-        &self,
         state: &mut InputState,
         window: &mut Window,
         cx: &mut Context<InputState>,
+        max_lines: usize,
     ) {
         let start_byte = {
             let text = state.text();
             // 去掉默认的一行
             let total_lines = text.lines_len() - 1;
-            if total_lines > self.max_lines {
-                let excess = total_lines - self.max_lines;
+            if total_lines > max_lines {
+                let excess = total_lines - max_lines;
                 Some(text.line_start_offset(excess))
             } else {
                 None
@@ -493,38 +547,28 @@ impl IoPanel {
         }
     }
 
-    /// 结束当前未完成行：将解码器中残留的不完整字节刷新为文本，并创建新的解码器
-    fn finish_line(&mut self, pending: &mut String) {
-        if let Some(ref mut decoder) = self.decoder {
-            // flush 可能写入 U+FFFD（3 字节），预留空间避免越界 panic
-            pending.reserve(16);
-            let _ = decoder.decode_to_string(&[], pending, true);
-        }
-        // last=true 会把解码器置为 Finished，必须重新创建新解码器，
-        // 否则下一次 decode_to_string 会 panic（Must not use a decoder that has finished）
-        self.decoder = self.decoding.encoding().map(|e| e.new_decoder());
-        self.new_line = true;
-    }
-
-    /// 向只读编辑器追加文本（增量插入，避免全量重建）
-    fn insert_text(&mut self, text: String, cx: &mut Context<Self>) {
-        let auto_scroll = self.whether_auto_scroll_to_bottom;
-        let window = self.window;
-        let port_input_state = self.port_input_state.clone();
-
+    /// 向指定的编辑器追加文本（增量插入，避免全量重建）
+    fn insert_text(
+        text: String,
+        cx: &mut Context<Self>,
+        target_state: Entity<InputState>,
+        whether_auto_scroll_to_bottom: bool,
+        window: AnyWindowHandle,
+        max_lines: usize,
+    ) {
         let _ = window.update(cx, |_, window, cx| {
-            port_input_state.update(cx, |state, cx| {
+            target_state.update(cx, |state, cx| {
                 let saved_scroll = state.scroll_offset();
 
                 state.insert(text, window, cx);
-                self.trim_to_max_lines(state, window, cx);
+                Self::trim_to_max_lines(state, window, cx, max_lines);
 
                 let len = state.text().len();
 
                 // 修复原来的 set_cursor_position 一直主动聚焦自身的bug
                 state.set_selected_range(len..len, cx);
 
-                if !auto_scroll {
+                if !whether_auto_scroll_to_bottom {
                     // 裁剪会把光标移到开头，这里恢复裁剪前的滚动位置；
                     // 光标已移回末尾，避免下次 insert 插到开头。
                     state.set_scroll_offset(saved_scroll, cx);

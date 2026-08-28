@@ -9,9 +9,9 @@ use crate::model::port_model::{
 use crate::ui_config;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
-    ParentElement, Render, SharedString, Styled, Subscription, Task, Window, div, green, px, rgb,
-    white,
+    AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement, ParentElement, Render, SharedString, Styled, Subscription, Task, Window,
+    div, green, px, rgb, white,
 };
 use gpui_component::button::Button;
 use gpui_component::dialog::DialogButtonProps;
@@ -409,7 +409,12 @@ impl Render for PortPanel {
                         .border_1()
                         .track_focus(&self.port_config_focus_handle)
                         .when_else(
-                            self.port_config_focus_handle.is_focused(window),
+                            self.port_config_focus_handle.is_focused(window)
+                                || self.band_rate_select.focus_handle(cx).is_focused(window)
+                                || self.data_bit_select.focus_handle(cx).is_focused(window)
+                                || self.parity_select.focus_handle(cx).is_focused(window)
+                                || self.port_info_select.focus_handle(cx).is_focused(window)
+                                || self.stop_bit_select.focus_handle(cx).is_focused(window),
                             |div| div.border_color(rgb(config.get_focus_border_color())),
                             |div| div.border_color(rgb(config.get_default_border_color())),
                         )

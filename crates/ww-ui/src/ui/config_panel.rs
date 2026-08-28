@@ -50,7 +50,10 @@ impl Render for ConfigPanel {
                     .size_full()
                     .border_1()
                     .when_else(
-                        self.focus.is_focused(window),
+                        self.focus.is_focused(window)
+                            || self.font_family_select.focus_handle(cx).is_focused(window)
+                            || self.encoding_select.focus_handle(cx).is_focused(window)
+                            || self.decoding_select.focus_handle(cx).is_focused(window),
                         |div| div.border_color(rgb(config.get_focus_border_color())),
                         |div| div.border_color(rgb(config.get_default_border_color())),
                     )

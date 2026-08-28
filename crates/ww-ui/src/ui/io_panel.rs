@@ -1,8 +1,8 @@
 use encoding_rs::Decoder;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyWindowHandle, AppContext, Context, Entity, FocusHandle, InteractiveElement, ParentElement,
-    Render, Styled, Subscription, Window, actions, div, green, rgb, white,
+    AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
+    ParentElement, Render, Styled, Subscription, Window, actions, div, green, rgb, white,
 };
 use gpui_component::StyledExt;
 use gpui_component::checkbox::Checkbox;
@@ -70,7 +70,8 @@ impl Render for IoPanel {
                             .track_focus(&self.output_focus_handle)
                             .border_1()
                             .when_else(
-                                self.output_focus_handle.is_focused(window),
+                                self.output_focus_handle.is_focused(window)
+                                    || self.input_state.focus_handle(cx).is_focused(window),
                                 |div| div.border_color(rgb(config.get_focus_border_color())),
                                 |div| div.border_color(rgb(config.get_default_border_color())),
                             )

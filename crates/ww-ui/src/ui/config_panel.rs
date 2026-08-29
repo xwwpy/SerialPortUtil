@@ -3,138 +3,25 @@ use gpui::{
     div, prelude::FluentBuilder, px, rgb,
 };
 use gpui_component::{
-    Theme,
+    IndexPath, Theme,
     label::Label,
     select::{SearchableVec, Select, SelectEvent, SelectState},
     white,
 };
 
 use crate::{
-    model::config_panel::{DecodingItem, EncodingItem, FontFamilyItem, Supported},
+    model::config_panel::{AutoAppendItem, DecodingItem, EncodingItem, FontFamilyItem, Supported},
     ui::io_panel::IoPanel,
-    ui_config,
+    ui_config::{self, LABLE_SIZE},
 };
 
-pub struct ConfigPanel {
-    font_family_select: Entity<SelectState<SearchableVec<FontFamilyItem>>>,
-    encoding_select: Entity<SelectState<SearchableVec<EncodingItem>>>,
-    decoding_select: Entity<SelectState<SearchableVec<DecodingItem>>>,
+pub struct FontConfigPanel {
     focus: FocusHandle,
+    font_family_select: Entity<SelectState<SearchableVec<FontFamilyItem>>>,
 }
 
-impl Focusable for ConfigPanel {
-    fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
-        self.focus.clone()
-    }
-}
-
-impl Render for ConfigPanel {
-    fn render(
-        &mut self,
-        window: &mut gpui::Window,
-        cx: &mut gpui::prelude::Context<Self>,
-    ) -> impl gpui::prelude::IntoElement {
-        let config = ui_config::get().get_common_config();
-        div()
-            .w_full()
-            .rounded_md()
-            .bg(white())
-            .shadow_md()
-            .p_2()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .p_4()
-                    .size_full()
-                    .border_1()
-                    .when_else(
-                        self.focus.is_focused(window)
-                            || self.font_family_select.focus_handle(cx).is_focused(window)
-                            || self.encoding_select.focus_handle(cx).is_focused(window)
-                            || self.decoding_select.focus_handle(cx).is_focused(window),
-                        |div| div.border_color(rgb(config.get_focus_border_color())),
-                        |div| div.border_color(rgb(config.get_default_border_color())),
-                    )
-                    .track_focus(&self.focus_handle(cx))
-                    .rounded_md()
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .overflow_hidden()
-                            .child(
-                                Label::new("选择字体：")
-                                    .w(px(100.))
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.font_family_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .cursor_pointer()
-                                        .placeholder("选择字体"),
-                                ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .overflow_hidden()
-                            .child(
-                                Label::new("接收编码：")
-                                    .w(px(100.))
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.decoding_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .cursor_pointer()
-                                        .placeholder("选择接收编码"),
-                                ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .w_full()
-                            .items_center()
-                            .overflow_hidden()
-                            .child(
-                                Label::new("发送编码：")
-                                    .w(px(100.))
-                                    .flex_shrink_0()
-                                    .flex_grow_0(),
-                            )
-                            .child(
-                                div().flex_1().overflow_hidden().child(
-                                    Select::new(&self.encoding_select)
-                                        .w_full()
-                                        .text_ellipsis()
-                                        .cursor_pointer()
-                                        .placeholder("选择发送编码"),
-                                ),
-                            ),
-                    ),
-            )
-    }
-}
-
-impl ConfigPanel {
-    pub fn new(
-        window: &mut gpui::Window,
-        cx: &mut gpui::prelude::Context<Self>,
-        io_panel: Entity<IoPanel>,
-    ) -> Self {
+impl FontConfigPanel {
+    pub fn new(window: &mut gpui::Window, cx: &mut gpui::prelude::Context<Self>) -> Self {
         let fonts: SearchableVec<FontFamilyItem> = cx
             .text_system()
             .all_font_names()
@@ -169,7 +56,198 @@ impl ConfigPanel {
             },
         )
         .detach();
+        Self {
+            focus: cx.focus_handle(),
+            font_family_select: select_state,
+        }
+    }
+}
 
+impl Focusable for FontConfigPanel {
+    fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl Render for FontConfigPanel {
+    fn render(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::prelude::Context<Self>,
+    ) -> impl gpui::prelude::IntoElement {
+        let config = ui_config::get().get_common_config();
+        div()
+            .w_full()
+            .rounded_md()
+            .bg(white())
+            .shadow_md()
+            .p_2()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .p_4()
+                    .size_full()
+                    .border_1()
+                    .when_else(
+                        self.focus.is_focused(window)
+                            || self.font_family_select.focus_handle(cx).is_focused(window),
+                        |div| div.border_color(rgb(config.get_focus_border_color())),
+                        |div| div.border_color(rgb(config.get_default_border_color())),
+                    )
+                    .track_focus(&self.focus_handle(cx))
+                    .rounded_md()
+                    .child(
+                        div()
+                            .flex()
+                            .w_full()
+                            .items_center()
+                            .overflow_hidden()
+                            .flex_wrap()
+                            .child(
+                                Label::new("选择字体：")
+                                    .w(px(LABLE_SIZE))
+                                    .flex_shrink_0()
+                                    .flex_grow_0(),
+                            )
+                            .child(
+                                div().flex_1().child(
+                                    Select::new(&self.font_family_select)
+                                        .w_full()
+                                        .cursor_pointer()
+                                        .placeholder("选择字体"),
+                                ),
+                            ),
+                    ),
+            )
+    }
+}
+
+pub struct TxRxConfigPanel {
+    encoding_select: Entity<SelectState<SearchableVec<EncodingItem>>>,
+    decoding_select: Entity<SelectState<SearchableVec<DecodingItem>>>,
+    auto_append_to_tx_select: Entity<SelectState<SearchableVec<AutoAppendItem>>>,
+    focus: FocusHandle,
+}
+
+impl Focusable for TxRxConfigPanel {
+    fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl Render for TxRxConfigPanel {
+    fn render(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::prelude::Context<Self>,
+    ) -> impl gpui::prelude::IntoElement {
+        let config = ui_config::get().get_common_config();
+        div()
+            .w_full()
+            .rounded_md()
+            .bg(white())
+            .shadow_md()
+            .p_2()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .p_4()
+                    .size_full()
+                    .border_1()
+                    .when_else(
+                        self.focus.is_focused(window)
+                            || self.encoding_select.focus_handle(cx).is_focused(window)
+                            || self.decoding_select.focus_handle(cx).is_focused(window)
+                            || self
+                                .auto_append_to_tx_select
+                                .focus_handle(cx)
+                                .is_focused(window),
+                        |div| div.border_color(rgb(config.get_focus_border_color())),
+                        |div| div.border_color(rgb(config.get_default_border_color())),
+                    )
+                    .track_focus(&self.focus_handle(cx))
+                    .rounded_md()
+                    .child(
+                        div()
+                            .flex()
+                            .w_full()
+                            .items_center()
+                            .overflow_hidden()
+                            .flex_wrap()
+                            .child(
+                                Label::new("接收编码：")
+                                    .w(px(LABLE_SIZE))
+                                    .flex_shrink_0()
+                                    .flex_grow_0(),
+                            )
+                            .child(
+                                div().flex_1().child(
+                                    Select::new(&self.decoding_select)
+                                        .w_full()
+                                        .cursor_pointer()
+                                        .placeholder("选择接收编码"),
+                                ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .w_full()
+                            .items_center()
+                            .overflow_hidden()
+                            .flex_wrap()
+                            .child(
+                                Label::new("发送编码：")
+                                    .w(px(LABLE_SIZE))
+                                    .flex_shrink_0()
+                                    .flex_grow_0(),
+                            )
+                            .child(
+                                div().flex_1().child(
+                                    Select::new(&self.encoding_select)
+                                        .w_full()
+                                        .cursor_pointer()
+                                        .placeholder("选择发送编码"),
+                                ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .w_full()
+                            .items_center()
+                            .overflow_hidden()
+                            .flex_wrap()
+                            .child(
+                                Label::new("发送时自动添加：")
+                                    .w(px(LABLE_SIZE))
+                                    .flex_shrink_0()
+                                    .flex_grow_0(),
+                            )
+                            .child(
+                                div().flex_1().child(
+                                    Select::new(&self.auto_append_to_tx_select)
+                                        .w_full()
+                                        .cursor_pointer()
+                                        .placeholder("选择自动添加内容"),
+                                ),
+                            ),
+                    ),
+            )
+    }
+}
+
+impl TxRxConfigPanel {
+    pub fn new(
+        window: &mut gpui::Window,
+        cx: &mut gpui::prelude::Context<Self>,
+        io_panel: Entity<IoPanel>,
+    ) -> Self {
+        let config = ui_config::get().get_common_config();
         let encoding_select = cx.new(|cx| {
             SelectState::new(
                 Supported::all()
@@ -183,7 +261,7 @@ impl ConfigPanel {
             )
         });
 
-        let default_encoding = config.get_common_config().get_encoding().into();
+        let default_encoding = config.get_encoding().into();
         encoding_select.update(cx, |state, cx| {
             state.set_selected_value(&default_encoding, window, cx);
             cx.notify();
@@ -202,7 +280,7 @@ impl ConfigPanel {
             )
         });
 
-        let default_decoding = config.get_common_config().get_decoding().into();
+        let default_decoding = config.get_decoding().into();
         decoding_select.update(cx, |state, cx| {
             state.set_selected_value(&default_decoding, window, cx);
             cx.notify();
@@ -247,10 +325,22 @@ impl ConfigPanel {
             io_panel._decoding_changed_subscription = Some(decoding_sub);
         });
 
+        let auto_append_vec = vec![
+            AutoAppendItem::None,
+            AutoAppendItem::Lf,
+            AutoAppendItem::Cr,
+            AutoAppendItem::CrLf,
+            AutoAppendItem::LfCr,
+        ]
+        .into();
+
+        let auto_append_to_tx_select =
+            cx.new(|cx| SelectState::new(auto_append_vec, Some(IndexPath::new(0)), window, cx));
+
         Self {
-            font_family_select: select_state.clone(),
             encoding_select: encoding_select.clone(),
             decoding_select: decoding_select.clone(),
+            auto_append_to_tx_select,
             focus: cx.focus_handle(),
         }
     }

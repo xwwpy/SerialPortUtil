@@ -162,6 +162,7 @@ impl Render for IoPanel {
                                     .h_flex()
                                     .items_center()
                                     .overflow_hidden()
+                                    .flex_wrap()
                                     .child(Label::new("Rx："))
                                     .child(
                                         Checkbox::new("WhetherShowRxData")
@@ -179,6 +180,7 @@ impl Render for IoPanel {
                                     .h_flex()
                                     .items_center()
                                     .overflow_hidden()
+                                    .flex_wrap()
                                     .child(Label::new("Tx："))
                                     .child(
                                         Checkbox::new("WhetherShowTxData")
@@ -196,6 +198,7 @@ impl Render for IoPanel {
                                     .h_flex()
                                     .items_center()
                                     .overflow_hidden()
+                                    .flex_wrap()
                                     .child(Label::new("自动滚动到底部："))
                                     .child(
                                         Checkbox::new("auto_scroll_to_button")
@@ -213,6 +216,7 @@ impl Render for IoPanel {
                                     .h_flex()
                                     .items_center()
                                     .overflow_hidden()
+                                    .flex_wrap()
                                     .child(Label::new("添加时间戳："))
                                     .child(
                                         Checkbox::new("add_timestamp")
@@ -230,6 +234,7 @@ impl Render for IoPanel {
                                     .h_flex()
                                     .items_center()
                                     .overflow_hidden()
+                                    .flex_wrap()
                                     .child(Label::new("精简时间："))
                                     .child(
                                         Checkbox::new("simple_time_show")
@@ -247,6 +252,7 @@ impl Render for IoPanel {
                                     .h_flex()
                                     .items_center()
                                     .overflow_hidden()
+                                    .flex_wrap()
                                     .child(
                                         Label::new(
                                             // 去掉默认的一行
@@ -293,7 +299,7 @@ impl Render for IoPanel {
                             .child(
                                 Input::new(&self.user_input_state)
                                     .size_full()
-                                    .text_color(green())
+                                    .text_color(blue())
                                     .border_color(gray(100))
                                     .context_menu(|menu, _window, _cx| {
                                         menu.menu("复制", Box::new(Copy))

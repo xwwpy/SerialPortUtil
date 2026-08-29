@@ -173,3 +173,29 @@ impl SelectItem for EncodingItem {
         &self.encoding
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AutoAppendItem {
+    None,
+    CrLf,
+    LfCr,
+    Lf,
+    Cr,
+}
+
+impl SelectItem for AutoAppendItem {
+    type Value = Self;
+    fn title(&self) -> SharedString {
+        match self {
+            Self::None => "None".into(),
+            Self::Cr => r#"\r"#.into(),
+            Self::Lf => r#"\n"#.into(),
+            Self::CrLf => r#"\r\n"#.into(),
+            Self::LfCr => r#"\n\r"#.into(),
+        }
+    }
+
+    fn value(&self) -> &Self::Value {
+        self
+    }
+}

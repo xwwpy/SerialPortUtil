@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::common::error::UIError;
 use crate::model::port_model::BaudRateItem;
 
+pub const LABLE_SIZE: f32 = 120.;
+
 static UI_CONFIG: OnceLock<UIConfig> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

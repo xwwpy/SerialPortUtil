@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::event::UpdatePortsInfo;
-use crate::ui::config_panel::ConfigPanel;
+use crate::ui::config_panel::{FontConfigPanel, TxRxConfigPanel};
 use crate::ui::info::Info;
 use crate::ui::io_panel::IoPanel;
 use crate::ui::port_panel::PortPanel;
@@ -13,6 +13,7 @@ use gpui::{
     AppContext, AsyncApp, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
     IntoElement, ParentElement, Render, Styled, WeakEntity, Window, div, rgb, white,
 };
+use gpui_component::scroll::ScrollableElement;
 
 impl EventEmitter<UpdatePortsInfo> for MainView {}
 
@@ -22,7 +23,8 @@ pub struct MainView {
     right_focus_handle: FocusHandle,
     port_panel: Entity<PortPanel>,
     io_panel: Entity<IoPanel>,
-    config_panel: Entity<ConfigPanel>,
+    font_config_panel: Entity<FontConfigPanel>,
+    tx_rx_config_panel: Entity<TxRxConfigPanel>,
     info: Entity<Info>,
 }
 
@@ -47,7 +49,8 @@ impl MainView {
             left_focus_handle: cx.focus_handle(),
             right_focus_handle: cx.focus_handle(),
             port_panel: port_panel,
-            config_panel: cx.new(|cx| ConfigPanel::new(window, cx, io_panel.clone())),
+            font_config_panel: cx.new(|cx| FontConfigPanel::new(window, cx)),
+            tx_rx_config_panel: cx.new(|cx| TxRxConfigPanel::new(window, cx, io_panel.clone())),
             io_panel: io_panel,
             info: cx.new(|cx| Info::new(cx)),
         }
@@ -71,6 +74,7 @@ impl Render for MainView {
                     .w_full()
                     .flex()
                     .flex_grow(0.)
+                    .flex_shrink_0()
                     .justify_center()
                     .items_center()
                     .border_1()
@@ -86,6 +90,7 @@ impl Render for MainView {
                     .w_full()
                     .flex()
                     .flex_grow_1()
+                    .min_h_0()
                     .justify_center()
                     .items_center()
                     .rounded_md()
@@ -98,48 +103,62 @@ impl Render for MainView {
                             .items_center()
                             .justify_start()
                             .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_4()
-                                    .p_2()
-                                    .h_full()
-                                    .w_1_3()
-                                    .track_focus(&self.left_focus_handle)
-                                    .rounded_md()
-                                    .border_1()
-                                    .when_else(
-                                        self.left_focus_handle.is_focused(window),
-                                        |div| {
-                                            div.border_color(rgb(config.get_focus_border_color()))
-                                        },
-                                        |div| {
-                                            div.border_color(rgb(config.get_default_border_color()))
-                                        },
-                                    )
-                                    .child(self.port_panel.clone())
-                                    .child(self.config_panel.clone()),
+                                // 这里套一层是为了解决加上overflow_y_scrollbar导致的宽度异常
+                                div().h_full().w_1_3().child(
+                                    div()
+                                        .size_full()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_4()
+                                        .p_2()
+                                        .track_focus(&self.left_focus_handle)
+                                        .overflow_y_scrollbar()
+                                        .rounded_md()
+                                        .border_1()
+                                        .when_else(
+                                            self.left_focus_handle.is_focused(window),
+                                            |div| {
+                                                div.border_color(rgb(
+                                                    config.get_focus_border_color()
+                                                ))
+                                            },
+                                            |div| {
+                                                div.border_color(rgb(
+                                                    config.get_default_border_color()
+                                                ))
+                                            },
+                                        )
+                                        .child(self.port_panel.clone())
+                                        .child(self.tx_rx_config_panel.clone())
+                                        .child(self.font_config_panel.clone()),
+                                ),
                             )
                             .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_4()
-                                    .h_full()
-                                    .w_2_3()
-                                    .track_focus(&self.right_focus_handle)
-                                    .rounded_md()
-                                    .border_1()
-                                    .when_else(
-                                        self.right_focus_handle.is_focused(window),
-                                        |div| {
-                                            div.border_color(rgb(config.get_focus_border_color()))
-                                        },
-                                        |div| {
-                                            div.border_color(rgb(config.get_default_border_color()))
-                                        },
-                                    )
-                                    .child(self.io_panel.clone()),
+                                div().h_full().w_2_3().child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .size_full()
+                                        .gap_4()
+                                        .track_focus(&self.right_focus_handle)
+                                        .overflow_y_scrollbar()
+                                        .rounded_md()
+                                        .border_1()
+                                        .when_else(
+                                            self.right_focus_handle.is_focused(window),
+                                            |div| {
+                                                div.border_color(rgb(
+                                                    config.get_focus_border_color()
+                                                ))
+                                            },
+                                            |div| {
+                                                div.border_color(rgb(
+                                                    config.get_default_border_color()
+                                                ))
+                                            },
+                                        )
+                                        .child(self.io_panel.clone()),
+                                ),
                             ),
                     ),
             )
@@ -147,7 +166,8 @@ impl Render for MainView {
                 div()
                     .w_full()
                     .flex()
-                    .flex_grow(0.)
+                    .flex_grow_0()
+                    .flex_shrink_0()
                     .justify_center()
                     .items_center()
                     .border_1()

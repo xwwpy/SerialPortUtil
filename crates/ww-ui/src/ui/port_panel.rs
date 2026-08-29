@@ -6,7 +6,7 @@ use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, PortMessage, StopBitsItem, port_read_loop,
 };
 
-use crate::ui_config;
+use crate::ui_config::{self, LABLE_SIZE};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
@@ -358,6 +358,7 @@ impl Render for PortPanel {
                         .p_4()
                         .gap_4()
                         .overflow_hidden()
+                        .flex_wrap()
                         .border_1()
                         .track_focus(&self.port_open_focus_handle)
                         .when_else(
@@ -373,6 +374,7 @@ impl Render for PortPanel {
                                 Some(port_name) => format!("当前串口: {}", port_name),
                                 None => "未选择串口...".into(),
                             })
+                            .text_ellipsis()
                             .text_color(green()),
                         )
                         .child(
@@ -444,19 +446,20 @@ impl Render for PortPanel {
                                 .w_full()
                                 .items_center()
                                 .overflow_hidden()
+                                .flex_wrap()
                                 .child(
                                     Label::new("串口号：")
-                                        .w(px(100.))
+                                        .w(px(LABLE_SIZE))
                                         // 这里设置flex_shrink_0和flex_grow_0是为了防止标签被压缩或拉伸
                                         .flex_shrink_0()
                                         .flex_grow_0(),
                                 )
                                 .child(
                                     // 这里套一层是为了正确的控制缩放关系，Select内部使用SizeFull，如果不再套一层布局会有问题
-                                    div().flex_1().overflow_hidden().child(
+                                    // 如果需要完整显示Select，不让其超出父元素范围，可以加上overflow_hidden
+                                    div().flex_1().child(
                                         Select::new(&self.port_info_select)
                                             .w_full()
-                                            .text_ellipsis()
                                             .when_else(
                                                 !self.open_state,
                                                 |select| select.cursor_pointer(),
@@ -473,17 +476,17 @@ impl Render for PortPanel {
                                 .w_full()
                                 .items_center()
                                 .overflow_hidden()
+                                .flex_wrap()
                                 .child(
                                     Label::new("波特率：")
-                                        .w(px(100.))
+                                        .w(px(LABLE_SIZE))
                                         .flex_shrink_0()
                                         .flex_grow_0(),
                                 )
                                 .child(
-                                    div().flex_1().overflow_hidden().child(
+                                    div().flex_1().child(
                                         Select::new(&self.band_rate_select)
                                             .w_full()
-                                            .text_ellipsis()
                                             .when_else(
                                                 !self.open_state,
                                                 |select| select.cursor_pointer(),
@@ -500,17 +503,17 @@ impl Render for PortPanel {
                                 .w_full()
                                 .items_center()
                                 .overflow_hidden()
+                                .flex_wrap()
                                 .child(
                                     Label::new("校验位：")
-                                        .w(px(100.))
+                                        .w(px(LABLE_SIZE))
                                         .flex_shrink_0()
                                         .flex_grow_0(),
                                 )
                                 .child(
-                                    div().flex_1().overflow_hidden().child(
+                                    div().flex_1().child(
                                         Select::new(&self.parity_select)
                                             .w_full()
-                                            .text_ellipsis()
                                             .when_else(
                                                 !self.open_state,
                                                 |select| select.cursor_pointer(),
@@ -527,17 +530,17 @@ impl Render for PortPanel {
                                 .w_full()
                                 .items_center()
                                 .overflow_hidden()
+                                .flex_wrap()
                                 .child(
                                     Label::new("数据位数：")
-                                        .w(px(100.))
+                                        .w(px(LABLE_SIZE))
                                         .flex_shrink_0()
                                         .flex_grow_0(),
                                 )
                                 .child(
-                                    div().flex_1().overflow_hidden().child(
+                                    div().flex_1().child(
                                         Select::new(&self.data_bit_select)
                                             .w_full()
-                                            .text_ellipsis()
                                             .when_else(
                                                 !self.open_state,
                                                 |select| select.cursor_pointer(),
@@ -554,17 +557,17 @@ impl Render for PortPanel {
                                 .w_full()
                                 .items_center()
                                 .overflow_hidden()
+                                .flex_wrap()
                                 .child(
                                     Label::new("停止位数：")
-                                        .w(px(100.))
+                                        .w(px(LABLE_SIZE))
                                         .flex_shrink_0()
                                         .flex_grow_0(),
                                 )
                                 .child(
-                                    div().flex_1().overflow_hidden().child(
+                                    div().flex_1().child(
                                         Select::new(&self.stop_bit_select)
                                             .w_full()
-                                            .text_ellipsis()
                                             .when_else(
                                                 !self.open_state,
                                                 |select| select.cursor_pointer(),

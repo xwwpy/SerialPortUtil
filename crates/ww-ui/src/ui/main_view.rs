@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::event::UpdatePortsInfo;
+use crate::event::{OpenStateChanged, ReceivedData, UpdatePortsInfo};
 use crate::ui::config_panel::{FontConfigPanel, TxRxConfigPanel};
 use crate::ui::info::Info;
 use crate::ui::io_panel::IoPanel;
@@ -31,6 +31,11 @@ pub struct MainView {
 impl MainView {
     pub fn new(cx: &mut Context<Self>, window: &mut gpui::Window) -> Self {
         let main_view_entity = cx.entity();
+
+        let io_panel = cx.new(|cx| IoPanel::new(cx, window));
+
+        let io_panel_weak = io_panel.downgrade();
+
         let port_panel = cx.new(|cx| {
             let update_info_sub = cx.subscribe(
                 &main_view_entity,
@@ -38,12 +43,32 @@ impl MainView {
                     this.update_info(cx);
                 },
             );
-            PortPanel::new(window, cx, update_info_sub)
+            PortPanel::new(io_panel_weak, window, cx, update_info_sub)
         });
-        let port_panel_cloned = port_panel.clone();
+
         cx.spawn(update_ports_info).detach();
 
-        let io_panel = cx.new(|cx| IoPanel::new(cx, window, port_panel_cloned));
+        // 订阅port_panel的事件
+        io_panel.update(cx, |io_panel, cx| {
+            let receive_data_subscription = cx.subscribe(
+                &port_panel,
+                |this, _port_panel, datas: &ReceivedData, cx| {
+                    this.resolve_port_input_data(&datas.data, cx);
+                },
+            );
+
+            let open_state_subscription = cx.subscribe(
+                &port_panel,
+                |this, _port_panel, open_state: &OpenStateChanged, cx| {
+                    this.port_open_state = open_state.open_state;
+                    cx.notify();
+                },
+            );
+
+            io_panel._receive_data_subscription = Some(receive_data_subscription);
+            io_panel._open_state_observer_subscription = Some(open_state_subscription);
+        });
+
         Self {
             title_bar: cx.new(|cx| TitleBar::new(cx)),
             left_focus_handle: cx.focus_handle(),
@@ -192,6 +217,6 @@ async fn update_ports_info(main_view_entity: WeakEntity<MainView>, cx: &mut Asyn
         if let Err(e) = emit_res {
             tracing::error!("更新端口信息失败：{e}");
         }
-        tokio::time::sleep(Duration::from_secs(interval)).await;
+        tokio::time::sleep(Duration::from_millis(interval)).await;
     }
 }

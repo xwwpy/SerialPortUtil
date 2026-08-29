@@ -6,12 +6,13 @@ use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, PortMessage, StopBitsItem, port_read_loop,
 };
 
+use crate::ui::io_panel::IoPanel;
 use crate::ui_config::{self, LABLE_SIZE};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyWindowHandle, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, ParentElement, Render, SharedString, Styled, Subscription, Task, Window,
-    div, green, px, rgb, white,
+    InteractiveElement, ParentElement, Render, SharedString, Styled, Subscription, Task,
+    WeakEntity, Window, div, green, px, rgb, white,
 };
 use gpui_component::button::Button;
 use gpui_component::dialog::DialogButtonProps;
@@ -24,6 +25,7 @@ use ww_protocol::{get_ports, model::Ports};
 pub struct PortPanel {
     window: AnyWindowHandle,
     ports: Ports,
+    io_panel: WeakEntity<IoPanel>,
     port_open_focus_handle: FocusHandle,
     port_config_focus_handle: FocusHandle,
     pub open_state: bool, // 当前串口是否开启
@@ -47,6 +49,7 @@ impl EventEmitter<OpenStateChanged> for PortPanel {}
 
 impl PortPanel {
     pub fn new(
+        io_panel: WeakEntity<IoPanel>,
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
         update_info_sub: Subscription,
@@ -67,6 +70,7 @@ impl PortPanel {
         .detach();
         Self {
             window: window.window_handle(),
+            io_panel,
             ports: Ports::new(),
             port_open_focus_handle: cx.focus_handle(),
             port_config_focus_handle: cx.focus_handle(),
@@ -270,6 +274,20 @@ impl PortPanel {
         }
 
         let port = port.unwrap();
+
+        let port_handle = port.try_clone();
+
+        if port_handle.is_err() {
+            tracing::error!("Failed to clone port: {:?}", port_handle);
+            return;
+        }
+
+        let port_handle = port_handle.unwrap();
+
+        // 将端口句柄设置到 io_panel 中
+        let _ = self.io_panel.update(cx, |io_panel, _cx| {
+            io_panel.port_handle = Some(port_handle);
+        });
 
         // 用 channel 把后台线程读取到的数据发回主线程
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PortMessage>();

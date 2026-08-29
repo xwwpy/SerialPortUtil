@@ -1,25 +1,28 @@
 use encoding_rs::{Decoder, Encoder};
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyWindowHandle, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement,
-    ParentElement, Render, Styled, Subscription, Window, actions, blue, div, green, rgb, white,
+    AnyWindowHandle, AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable,
+    InteractiveElement, ParentElement, Render, Styled, Subscription, Window, actions, blue, div,
+    green, rgb, white,
 };
 use gpui_component::button::Button;
 use gpui_component::checkbox::Checkbox;
+use gpui_component::dialog::DialogButtonProps;
 use gpui_component::input::{Copy, Input, InputState, RopeExt, SelectAll};
 use gpui_component::label::Label;
-use gpui_component::{Disableable, StyledExt, gray};
+use gpui_component::{Disableable, StyledExt, WindowExt, gray};
+use ww_protocol::SerialPort;
 
-use crate::event::OpenStateChanged;
 use crate::model::config_panel::{AutoAppendItem, Supported};
 use crate::ui_config;
-use crate::{event::ReceivedData, ui::port_panel::PortPanel};
 
 actions!([ClearPortInputText, ClearUserInputText, ClearUserShowText]);
 
 pub struct IoPanel {
     window: AnyWindowHandle,
-    port_input_state: Entity<InputState>, // 端口输入内容展示面板
+    pub port_handle: Option<Box<dyn SerialPort>>,
+    pub last_send_completed: bool,             // 上次发送是否完成
+    port_input_state: Entity<InputState>,      // 端口输入内容展示面板
     user_input_show_state: Entity<InputState>, // 用户输入内容展示面板
     user_input_state: Entity<InputState>,
 
@@ -31,7 +34,7 @@ pub struct IoPanel {
     info_config_focus_handle: FocusHandle,
     whether_auto_scroll_to_bottom: bool,
     whether_add_timestamp: bool,
-    port_open_state: bool,
+    pub port_open_state: bool,
     pub encoding: Supported,
 
     pub encoder: Option<Encoder>,
@@ -41,8 +44,8 @@ pub struct IoPanel {
 
     pub auto_tx_append: AutoAppendItem,
 
-    _receive_data_subscription: Option<Subscription>,
-    _open_state_observer_subscription: Option<Subscription>,
+    pub _receive_data_subscription: Option<Subscription>,
+    pub _open_state_observer_subscription: Option<Subscription>,
     port_input_new_line: bool,
     port_input_received_bytes: u64,
     port_input_max_lines: usize,
@@ -316,84 +319,122 @@ impl Render for IoPanel {
                                 Button::new("submit")
                                     .label("发送")
                                     .when_else(
-                                        self.port_open_state,
+                                        self.port_open_state && self.last_send_completed,
                                         |btn| btn.cursor_pointer(),
                                         |btn| btn.disabled(true).cursor_not_allowed(),
                                     )
-                                    .on_click(cx.listener(|this, _event, window, cx| {
-                                        this.focus_user_input(window, cx);
-
-                                        let user_input = this.user_input_state.read(cx).value();
-                                        let mut content_to_show = user_input.to_string();
-                                        if this.whether_add_timestamp {
-                                            if this.simple_time_show {
-                                                content_to_show = format!(
-                                                    "{}",
-                                                    jiff::Zoned::now().strftime("%H:%M:%S%.3f: ")
-                                                );
-                                            } else {
-                                                content_to_show = format!(
-                                                    "{}",
-                                                    jiff::Zoned::now()
-                                                        .strftime("%Y-%m-%d %H:%M:%S%.3f: ")
-                                                );
-                                            }
-                                            content_to_show.push_str(&user_input);
-                                        }
-
-                                        match this.auto_tx_append {
-                                            AutoAppendItem::None => {}
-                                            AutoAppendItem::Lf => {
-                                                content_to_show.push('\n');
-                                            }
-                                            AutoAppendItem::Cr => {
-                                                content_to_show.push('\r');
-                                            }
-                                            AutoAppendItem::CrLf => {
-                                                content_to_show.push_str("\r\n");
-                                            }
-                                            AutoAppendItem::LfCr => {
-                                                content_to_show.push_str("\n\r");
-                                            }
-                                        };
-
-                                        // 窗口已经在更新栈中，不能再使用window_handle.update
-                                        Self::insert_text_without_window_handle(
-                                            content_to_show,
-                                            cx,
-                                            this.user_input_show_state.clone(),
-                                            this.whether_auto_scroll_to_bottom,
-                                            window,
-                                            this.user_input_max_line,
-                                        );
-                                    })),
+                                    .on_click(cx.listener(submit_user_input)),
                             ),
                     ),
             )
     }
 }
 
+pub fn submit_user_input(
+    this: &mut IoPanel,
+    _event: &ClickEvent,
+    window: &mut Window,
+    cx: &mut Context<IoPanel>,
+) {
+    if !this.last_send_completed {
+        window.open_alert_dialog(cx, move |alert, _, _cx| {
+            alert
+                .title("发送的过于频繁...")
+                .description("请等待上次发送完成后再发送")
+                .button_props(DialogButtonProps::default().ok_text("关闭"))
+                .on_ok(|_, _window, _cx| true)
+        });
+        return;
+    }
+
+    this.last_send_completed = false;
+
+    this.focus_user_input(window, cx);
+
+    let user_input = this.user_input_state.read(cx).value();
+
+    let mut content_to_show = user_input.to_string();
+
+    match this.auto_tx_append {
+        AutoAppendItem::None => {}
+        AutoAppendItem::Lf => {
+            content_to_show.push('\n');
+        }
+        AutoAppendItem::Cr => {
+            content_to_show.push('\r');
+        }
+        AutoAppendItem::CrLf => {
+            content_to_show.push_str("\r\n");
+        }
+        AutoAppendItem::LfCr => {
+            content_to_show.push_str("\n\r");
+        }
+    };
+
+    let current_encoding = this.encoding;
+
+    let content_to_send = content_to_show.clone();
+
+    let mut port_handle = this.port_handle.take();
+
+    cx.spawn(async move |io_panel, cx| {
+        let datas = IoPanel::resolve_user_input_data(current_encoding, &content_to_send);
+
+        let total_bytes = datas.len();
+
+        let mut send_bytes = 0;
+
+        if let Some(ref mut port_handle) = port_handle {
+            while send_bytes < total_bytes {
+                let chunk = &datas[send_bytes..];
+                let res = port_handle.write(chunk);
+                if res.is_ok() {
+                    send_bytes += res.unwrap();
+                } else {
+                    tracing::error!("Failed to write chunk: {:?}", res);
+                    break;
+                }
+            }
+        }
+
+        let _ = io_panel.update(cx, move |panel, cx| {
+            panel.port_handle = port_handle;
+            panel.last_send_completed = true;
+            cx.notify();
+        });
+    })
+    .detach();
+
+    if this.whether_add_timestamp {
+        if this.simple_time_show {
+            content_to_show = format!(
+                "{}{}",
+                jiff::Zoned::now().strftime("%H:%M:%S%.3f: "),
+                content_to_show
+            );
+        } else {
+            content_to_show = format!(
+                "{}{}",
+                jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S%.3f: "),
+                content_to_show
+            );
+        }
+    }
+
+    // 窗口已经在更新栈中，不能再使用window_handle.update
+    IoPanel::insert_text_without_window_handle(
+        content_to_show,
+        cx,
+        this.user_input_show_state.clone(),
+        this.whether_auto_scroll_to_bottom,
+        window,
+        this.user_input_max_line,
+    );
+    cx.notify();
+}
+
 impl IoPanel {
-    pub fn new(
-        cx: &mut gpui::prelude::Context<Self>,
-        window: &mut Window,
-        port_panel: Entity<PortPanel>,
-    ) -> Self {
-        let subscription = cx.subscribe(
-            &port_panel,
-            |this, _port_panel, datas: &ReceivedData, cx| {
-                this.resolve_port_input_data(&datas.data, cx);
-            },
-        );
-
-        let open_state_subscription = cx.subscribe(
-            &port_panel,
-            |this, _port_panel, open_state: &OpenStateChanged, cx| {
-                this.port_open_state = open_state.open_state;
-                cx.notify();
-            },
-        );
-
+    pub fn new(cx: &mut gpui::prelude::Context<Self>, window: &mut Window) -> Self {
         let config = ui_config::get().get_common_config();
 
         let encoding: Supported = config.get_encoding().into();
@@ -425,6 +466,8 @@ impl IoPanel {
 
         IoPanel {
             window: window.window_handle(),
+            last_send_completed: true,
+            port_handle: None,
             port_input_state,
             user_input_show_state,
             user_input_state,
@@ -446,8 +489,8 @@ impl IoPanel {
                 .get_default_auto_tx_append_item()
                 .into(),
 
-            _receive_data_subscription: Some(subscription),
-            _open_state_observer_subscription: Some(open_state_subscription),
+            _receive_data_subscription: None,
+            _open_state_observer_subscription: None,
             port_open_state: false,
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
@@ -595,8 +638,8 @@ impl IoPanel {
     /// - 非 Hex 编码：直接按对应编码把文本编码成字节。
     /// - Hex 编码：输入是十六进制字节串，空格等空白字符仅作为分隔符，不参与解析。
     /// TODO 将解析好的数据发送给串口
-    pub fn resolve_user_input_data(&self, datas: &str) -> Vec<u8> {
-        match self.encoding.encoding() {
+    pub fn resolve_user_input_data(encoding: Supported, datas: &str) -> Vec<u8> {
+        match encoding.encoding() {
             Some(enc) => enc.encode(datas).0.into_owned(),
             None => {
                 let mut out = Vec::new();

@@ -183,6 +183,19 @@ pub enum AutoAppendItem {
     Cr,
 }
 
+impl From<String> for AutoAppendItem {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "" | "None" => Self::None,
+            r#"\r\n"# | "\r\n" => Self::CrLf,
+            r#"\n\r"# | "\n\r" => Self::LfCr,
+            r#"\n"# | "\n" => Self::Lf,
+            r#"\r"# | "\r" => Self::Cr,
+            _ => Self::None,
+        }
+    }
+}
+
 impl SelectItem for AutoAppendItem {
     type Value = Self;
     fn title(&self) -> SharedString {

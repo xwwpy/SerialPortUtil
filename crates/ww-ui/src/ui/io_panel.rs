@@ -11,7 +11,7 @@ use gpui_component::label::Label;
 use gpui_component::{Disableable, StyledExt, gray};
 
 use crate::event::OpenStateChanged;
-use crate::model::config_panel::Supported;
+use crate::model::config_panel::{AutoAppendItem, Supported};
 use crate::ui_config;
 use crate::{event::ReceivedData, ui::port_panel::PortPanel};
 
@@ -39,6 +39,8 @@ pub struct IoPanel {
     // 当前的流式解码器；Hex 模式为 None
     pub decoder: Option<Decoder>,
 
+    pub auto_tx_append: AutoAppendItem,
+
     _receive_data_subscription: Option<Subscription>,
     _open_state_observer_subscription: Option<Subscription>,
     port_input_new_line: bool,
@@ -52,6 +54,7 @@ pub struct IoPanel {
     simple_time_show: bool,
     pub _encoding_changed_subscription: Option<Subscription>,
     pub _decoding_changed_subscription: Option<Subscription>,
+    pub _auto_tx_append_observer_subscription: Option<Subscription>,
 }
 
 impl Render for IoPanel {
@@ -338,6 +341,22 @@ impl Render for IoPanel {
                                             content_to_show.push_str(&user_input);
                                         }
 
+                                        match this.auto_tx_append {
+                                            AutoAppendItem::None => {}
+                                            AutoAppendItem::Lf => {
+                                                content_to_show.push('\n');
+                                            }
+                                            AutoAppendItem::Cr => {
+                                                content_to_show.push('\r');
+                                            }
+                                            AutoAppendItem::CrLf => {
+                                                content_to_show.push_str("\r\n");
+                                            }
+                                            AutoAppendItem::LfCr => {
+                                                content_to_show.push_str("\n\r");
+                                            }
+                                        };
+
                                         // 窗口已经在更新栈中，不能再使用window_handle.update
                                         Self::insert_text_without_window_handle(
                                             content_to_show,
@@ -422,11 +441,17 @@ impl IoPanel {
             decoding,
             decoder: decoding.encoding().map(|e| e.new_decoder()),
 
+            auto_tx_append: ui_config::get()
+                .get_common_config()
+                .get_default_auto_tx_append_item()
+                .into(),
+
             _receive_data_subscription: Some(subscription),
             _open_state_observer_subscription: Some(open_state_subscription),
             port_open_state: false,
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
+            _auto_tx_append_observer_subscription: None,
 
             port_input_new_line: true,
             port_input_received_bytes: 0,

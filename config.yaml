@@ -29,3 +29,4 @@ common_config:
   encoding: Utf8
   decoding: Utf8
   max_lines: 5000
+  auto_tx_append_item: \n

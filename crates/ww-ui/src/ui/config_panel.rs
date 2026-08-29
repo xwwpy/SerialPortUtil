@@ -3,7 +3,7 @@ use gpui::{
     div, prelude::FluentBuilder, px, rgb,
 };
 use gpui_component::{
-    IndexPath, Theme,
+    Theme,
     label::Label,
     select::{SearchableVec, Select, SelectEvent, SelectState},
     white,
@@ -290,13 +290,13 @@ impl TxRxConfigPanel {
         let encoding_sub = io_panel.update(cx, move |_io_panel, cx| {
             cx.subscribe(
                 &encoding_select_entity,
-                |this,
+                |io_panel,
                  _encoding_select_entity,
                  event: &SelectEvent<SearchableVec<EncodingItem>>,
                  cx| {
                     if let SelectEvent::Confirm(Some(encoding)) = event {
-                        this.encoding = encoding.clone();
-                        this.encoder = encoding.encoding().map(|e| e.new_encoder());
+                        io_panel.encoding = encoding.clone();
+                        io_panel.encoder = encoding.encoding().map(|e| e.new_encoder());
                         cx.notify();
                     }
                 },
@@ -307,22 +307,17 @@ impl TxRxConfigPanel {
         let decoding_sub = io_panel.update(cx, move |_io_panel, cx| {
             cx.subscribe(
                 &decoding_select_entity,
-                |this,
+                |io_panel,
                  _decoding_select_entity,
                  event: &SelectEvent<SearchableVec<DecodingItem>>,
                  cx| {
                     if let SelectEvent::Confirm(Some(decoding)) = event {
-                        this.decoding = decoding.clone();
-                        this.decoder = decoding.encoding().map(|e| e.new_decoder());
+                        io_panel.decoding = decoding.clone();
+                        io_panel.decoder = decoding.encoding().map(|e| e.new_decoder());
                         cx.notify();
                     }
                 },
             )
-        });
-
-        io_panel.update(cx, move |io_panel, _cx| {
-            io_panel._encoding_changed_subscription = Some(encoding_sub);
-            io_panel._decoding_changed_subscription = Some(decoding_sub);
         });
 
         let auto_append_vec = vec![
@@ -335,7 +330,39 @@ impl TxRxConfigPanel {
         .into();
 
         let auto_append_to_tx_select =
-            cx.new(|cx| SelectState::new(auto_append_vec, Some(IndexPath::new(0)), window, cx));
+            cx.new(|cx| SelectState::new(auto_append_vec, None, window, cx));
+
+        let default_auto_tx_append: AutoAppendItem = ui_config::get()
+            .get_common_config()
+            .get_default_auto_tx_append_item()
+            .into();
+
+        auto_append_to_tx_select.update(cx, |select, cx| {
+            select.set_selected_value(&default_auto_tx_append, window, cx);
+        });
+
+        let auto_tx_append_entity = auto_append_to_tx_select.clone();
+
+        let auto_tx_append_sub = io_panel.update(cx, move |_io_panel, cx| {
+            cx.subscribe(
+                &auto_tx_append_entity,
+                |io_panel,
+                 _auto_tx_append_entity,
+                 event: &SelectEvent<SearchableVec<AutoAppendItem>>,
+                 cx| {
+                    if let SelectEvent::Confirm(Some(auto_tx_append)) = event {
+                        io_panel.auto_tx_append = *auto_tx_append;
+                        cx.notify();
+                    }
+                },
+            )
+        });
+
+        io_panel.update(cx, move |io_panel, _cx| {
+            io_panel._encoding_changed_subscription = Some(encoding_sub);
+            io_panel._decoding_changed_subscription = Some(decoding_sub);
+            io_panel._auto_tx_append_observer_subscription = Some(auto_tx_append_sub);
+        });
 
         Self {
             encoding_select: encoding_select.clone(),

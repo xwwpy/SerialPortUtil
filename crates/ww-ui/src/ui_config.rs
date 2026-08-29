@@ -81,9 +81,17 @@ pub struct CommonConfig {
     encoding: Option<String>,
     decoding: Option<String>,
     max_lines: Option<usize>,
+    auto_tx_append_item: Option<String>,
 }
 
 impl CommonConfig {
+    pub fn get_default_auto_tx_append_item(&self) -> String {
+        self.auto_tx_append_item.clone().unwrap_or_else(|| {
+            tracing::info!(r#"没有配置默认发送追加字符，使用默认值\n"#);
+            "\n".to_string()
+        })
+    }
+
     pub fn get_font_family(&self) -> String {
         self.font_family.clone().unwrap_or_else(|| {
             tracing::info!("没有配置字体，使用默认值：JetBrains Mono");

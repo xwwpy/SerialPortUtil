@@ -382,17 +382,30 @@ pub fn submit_user_input(
 
         let total_bytes = datas.len();
 
+        let chunk_size = 64;
+
         let mut send_bytes = 0;
 
         if let Some(ref mut port_handle) = port_handle {
             while send_bytes < total_bytes {
-                let chunk = &datas[send_bytes..];
-                let res = port_handle.write(chunk);
-                if res.is_ok() {
-                    send_bytes += res.unwrap();
+                if send_bytes + chunk_size > total_bytes {
+                    let chunk = &datas[send_bytes..];
+                    let res = port_handle.write(chunk);
+                    if res.is_ok() {
+                        send_bytes += res.unwrap();
+                    } else {
+                        tracing::error!("Failed to write chunk: {:?}", res);
+                        break;
+                    }
                 } else {
-                    tracing::error!("Failed to write chunk: {:?}", res);
-                    break;
+                    let chunk = &datas[send_bytes..send_bytes + chunk_size];
+                    let res = port_handle.write(chunk);
+                    if res.is_ok() {
+                        send_bytes += res.unwrap();
+                    } else {
+                        tracing::error!("Failed to write chunk: {:?}", res);
+                        break;
+                    }
                 }
             }
         }

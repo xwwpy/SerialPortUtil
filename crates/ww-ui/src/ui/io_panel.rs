@@ -407,12 +407,27 @@ pub fn submit_user_input(
                         break;
                     }
                 }
+
+                // 检查端口是否已关闭
+                if let Some(io_panel) = io_panel.upgrade() {
+                    let open_state = io_panel.read_with(cx, |io_panel, _cx| {
+                        return io_panel.port_open_state;
+                    });
+
+                    if !open_state {
+                        break;
+                    }
+                }
             }
         }
 
         let _ = io_panel.update(cx, move |panel, cx| {
+            if !panel.port_open_state {
+                panel.last_send_completed = true;
+                drop(port_handle);
+                return;
+            }
             panel.port_handle = port_handle;
-            panel.last_send_completed = true;
             cx.notify();
         });
     })

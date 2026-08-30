@@ -215,6 +215,5 @@ pub fn port_read_loop(
         }
     }
     drop(port_handle);
-    tracing::info!("关闭串口成功...");
     cancel_flag.store(false, std::sync::atomic::Ordering::Relaxed);
 }

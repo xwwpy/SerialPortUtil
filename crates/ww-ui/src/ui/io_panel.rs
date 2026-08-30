@@ -550,7 +550,7 @@ impl IoPanel {
 
     fn clear_user_input_show_text(
         &mut self,
-        _: &ClearUserInputText,
+        _: &ClearUserShowText,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {

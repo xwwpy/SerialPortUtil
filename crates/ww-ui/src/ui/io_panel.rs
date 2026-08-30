@@ -388,6 +388,17 @@ pub fn submit_user_input(
 
         if let Some(ref mut port_handle) = port_handle {
             while send_bytes < total_bytes {
+                // 检查端口是否已关闭
+                if let Some(io_panel) = io_panel.upgrade() {
+                    let open_state = io_panel.read_with(cx, |io_panel, _cx| {
+                        return io_panel.port_open_state;
+                    });
+
+                    if !open_state {
+                        break;
+                    }
+                }
+
                 if send_bytes + chunk_size > total_bytes {
                     let chunk = &datas[send_bytes..];
                     let res = port_handle.write(chunk);
@@ -407,26 +418,17 @@ pub fn submit_user_input(
                         break;
                     }
                 }
-
-                // 检查端口是否已关闭
-                if let Some(io_panel) = io_panel.upgrade() {
-                    let open_state = io_panel.read_with(cx, |io_panel, _cx| {
-                        return io_panel.port_open_state;
-                    });
-
-                    if !open_state {
-                        break;
-                    }
-                }
             }
         }
 
+        tracing::info!("发送了{}字节", send_bytes);
+
         let _ = io_panel.update(cx, move |panel, cx| {
             if !panel.port_open_state {
-                panel.last_send_completed = true;
                 drop(port_handle);
                 return;
             }
+            panel.last_send_completed = true;
             panel.port_handle = port_handle;
             cx.notify();
         });
@@ -501,7 +503,7 @@ impl IoPanel {
             user_input_state,
             port_input_focus_handle: cx.focus_handle(),
             show_port_input_content: true,
-            show_user_input_content: false,
+            show_user_input_content: true,
             user_input_focus_handle: cx.focus_handle(),
             info_config_focus_handle: cx.focus_handle(),
             whether_auto_scroll_to_bottom: true,

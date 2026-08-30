@@ -61,7 +61,9 @@ impl MainView {
                 &port_panel,
                 |this, _port_panel, open_state: &OpenStateChanged, cx| {
                     this.port_open_state = open_state.open_state;
-                    drop(this.port_handle.take());
+                    if !open_state.open_state {
+                        drop(this.port_handle.take());
+                    }
                     cx.notify();
                 },
             );

@@ -23,3 +23,4 @@ tracing-appender = {workspace = true}
 ww-protocol = {path = "../ww-protocol"}
 encoding_rs = {workspace = true}
 jiff = {workspace = true}
+image = {workspace = true}

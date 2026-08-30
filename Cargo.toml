@@ -27,9 +27,13 @@ anyhow = {version = "*"}
 serialport = {version = "*"}
 encoding_rs = {version = "*"}
 jiff = {version = "*"}
+image = {version = "0.25", default-features = false, features = ["png"]}
 
 [dependencies]
 ww-ui = {path = "crates/ww-ui"}
 ww-protocol = {path = "crates/ww-protocol"}
 tokio.workspace = true
 anyhow.workspace = true
+
+[build-dependencies]
+winresource = "0.1"

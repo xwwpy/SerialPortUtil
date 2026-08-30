@@ -5,7 +5,7 @@ mod model;
 pub mod ui;
 mod ui_config;
 
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use crate::{common::log, ui::main_view::MainView, ui_config::get};
 
@@ -90,7 +90,7 @@ pub fn run() {
                 app_id: Some("SerialPortUi".to_string()),
                 window_min_size: None,
                 window_decorations: None,
-                icon: None,
+                icon: Some(load_window_icon()),
                 tabbing_identifier: Some("SerialPortUi".to_string()),
             };
 
@@ -134,4 +134,15 @@ fn print_banner() {
     println!(
         "\x1b[36m                         \x1b[1mWW: SerialPortUtil\x1b[0m\x1b[36m  Ready to Connect\x1b[0m"
     );
+}
+
+fn load_window_icon() -> Arc<image::RgbaImage> {
+    let icon = image::load_from_memory_with_format(
+        include_bytes!("../../../assets/icon.png"),
+        image::ImageFormat::Png,
+    )
+    .expect("embedded window icon must be a valid PNG")
+    .into_rgba8();
+
+    Arc::new(icon)
 }

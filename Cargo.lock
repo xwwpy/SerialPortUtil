@@ -8687,14 +8687,14 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "ww-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "config",
  "serde",
  "serde_json",
  "serialport",
- "thiserror 2.0.19",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -8703,7 +8703,7 @@ dependencies = [
 
 [[package]]
 name = "ww-ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "config",
@@ -8716,7 +8716,7 @@ dependencies = [
  "jiff",
  "serde",
  "serde_json",
- "thiserror 2.0.19",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "tracing-appender",

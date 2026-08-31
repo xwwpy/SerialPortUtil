@@ -70,6 +70,7 @@ pub fn run() {
             gpui_component::init(cx);
 
             let window_size = config.get_window_size();
+            let window_min_size = config.get_window_min_size();
             let bounds = Bounds::centered(
                 None,
                 size(px(window_size.width), px(window_size.height)),
@@ -88,7 +89,7 @@ pub fn run() {
                 display_id: None,
                 window_background: WindowBackgroundAppearance::Opaque,
                 app_id: Some("SerialPortUi".to_string()),
-                window_min_size: None,
+                window_min_size: Some(size(px(window_min_size.width), px(window_min_size.height))),
                 window_decorations: None,
                 icon: Some(load_window_icon()),
                 tabbing_identifier: Some("SerialPortUi".to_string()),

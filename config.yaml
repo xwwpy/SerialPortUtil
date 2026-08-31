@@ -2,6 +2,10 @@ window_size:
   width: 1200
   height: 700
 
+window_min_size:
+  width: 600
+  height: 350
+
 log_config:
   log_dir: Log
   log_level: info

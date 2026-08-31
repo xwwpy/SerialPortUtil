@@ -200,6 +200,7 @@ impl AuthorInfoConfig {
 #[serde(rename_all = "lowercase")]
 pub struct UIConfig {
     window_size: Option<Size<f32>>,
+    window_min_size: Option<Size<f32>>,
     log_config: LogConfig,
     author_info: AuthorInfoConfig,
     port_panel_config: PortPanelConfig,
@@ -208,6 +209,13 @@ pub struct UIConfig {
 }
 
 impl UIConfig {
+    pub fn get_window_min_size(&self) -> Size<f32> {
+        self.window_min_size.clone().unwrap_or_else(|| {
+            tracing::info!("没有配置窗口最小大小，使用默认值300,0");
+            size(300., 0.)
+        })
+    }
+
     pub fn get_log_config(&self) -> &LogConfig {
         &self.log_config
     }

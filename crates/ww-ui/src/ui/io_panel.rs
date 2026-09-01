@@ -21,9 +21,9 @@ actions!([ClearPortInputText, ClearUserInputText, ClearUserShowText]);
 pub struct IoPanel {
     window: AnyWindowHandle,
     pub port_handle: Option<Box<dyn SerialPort>>,
-    pub last_send_completed: bool,             // 上次发送是否完成
-    port_input_state: Entity<InputState>,      // 端口输入内容展示面板
-    user_input_show_state: Entity<InputState>, // 用户输入内容展示面板
+    pub last_send_completed: bool,                 // 上次发送是否完成
+    pub port_input_state: Entity<InputState>,      // 端口输入内容展示面板
+    pub user_input_show_state: Entity<InputState>, // 用户输入内容展示面板
     user_input_state: Entity<InputState>,
 
     show_port_input_content: bool,
@@ -47,12 +47,13 @@ pub struct IoPanel {
     pub _receive_data_subscription: Option<Subscription>,
     pub _open_state_observer_subscription: Option<Subscription>,
     port_input_new_line: bool,
-    port_input_received_bytes: u64,
-    port_input_max_lines: usize,
+    pub port_input_received_bytes: u64,
+    pub port_input_max_lines: usize,
     // Hex 模式下当前行是否已有内容，用于控制字节间的空格
     port_input_line_has_bytes: bool,
 
-    user_input_max_line: usize,
+    pub user_input_max_lines: usize,
+    pub user_transmit_bytes: u64,
     user_input_line_has_bytes: bool,
     simple_time_show: bool,
     pub _encoding_changed_subscription: Option<Subscription>,
@@ -252,27 +253,6 @@ impl Render for IoPanel {
                                             }))
                                             .cursor_pointer(),
                                     ),
-                            )
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .items_center()
-                                    .overflow_hidden()
-                                    .flex_wrap()
-                                    .child(
-                                        Label::new(
-                                            // 去掉默认的一行
-                                            (self.port_input_state.read(cx).text().lines_len() - 1)
-                                                .to_string(),
-                                        )
-                                        .text_color(green()),
-                                    )
-                                    .child(Label::new(format!("/{}-", self.port_input_max_lines)))
-                                    .child(
-                                        Label::new(self.port_input_received_bytes.to_string())
-                                            .text_color(green()),
-                                    )
-                                    .child(Label::new("个字节")),
                             ),
                     ),
             )
@@ -385,6 +365,7 @@ pub fn submit_user_input(
         let chunk_size = 64;
 
         let mut send_bytes = 0;
+        let mut cur_circle_transmit_bytes = 0;
 
         if let Some(ref mut port_handle) = port_handle {
             while send_bytes < total_bytes {
@@ -403,7 +384,8 @@ pub fn submit_user_input(
                     let chunk = &datas[send_bytes..];
                     let res = port_handle.write(chunk);
                     if res.is_ok() {
-                        send_bytes += res.unwrap();
+                        cur_circle_transmit_bytes += res.unwrap() as u64;
+                        send_bytes += cur_circle_transmit_bytes as usize;
                     } else {
                         tracing::error!("Failed to write chunk: {:?}", res);
                         break;
@@ -412,12 +394,16 @@ pub fn submit_user_input(
                     let chunk = &datas[send_bytes..send_bytes + chunk_size];
                     let res = port_handle.write(chunk);
                     if res.is_ok() {
-                        send_bytes += res.unwrap();
+                        cur_circle_transmit_bytes += res.unwrap() as u64;
+                        send_bytes += cur_circle_transmit_bytes as usize;
                     } else {
                         tracing::error!("Failed to write chunk: {:?}", res);
                         break;
                     }
                 }
+                let _ = io_panel.update(cx, |io_panel, _cx| {
+                    io_panel.user_transmit_bytes += cur_circle_transmit_bytes;
+                });
             }
         }
 
@@ -458,7 +444,7 @@ pub fn submit_user_input(
         this.user_input_show_state.clone(),
         this.whether_auto_scroll_to_bottom,
         window,
-        this.user_input_max_line,
+        this.user_input_max_lines,
     );
     cx.notify();
 }
@@ -531,7 +517,8 @@ impl IoPanel {
             port_input_max_lines: ui_config::get().get_common_config().get_max_lines(),
             port_input_line_has_bytes: false,
 
-            user_input_max_line: ui_config::get().get_common_config().get_max_lines(),
+            user_input_max_lines: ui_config::get().get_common_config().get_max_lines(),
+            user_transmit_bytes: 0,
             user_input_line_has_bytes: false,
         }
     }

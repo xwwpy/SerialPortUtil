@@ -72,6 +72,8 @@ impl MainView {
             io_panel._open_state_observer_subscription = Some(open_state_subscription);
         });
 
+        let info_entity = cx.new(|cx| Info::new(cx, io_panel.clone()));
+
         Self {
             title_bar: cx.new(|cx| TitleBar::new(cx)),
             left_focus_handle: cx.focus_handle(),
@@ -80,7 +82,7 @@ impl MainView {
             font_config_panel: cx.new(|cx| FontConfigPanel::new(window, cx)),
             tx_rx_config_panel: cx.new(|cx| TxRxConfigPanel::new(window, cx, io_panel.clone())),
             io_panel: io_panel,
-            info: cx.new(|cx| Info::new(cx)),
+            info: info_entity,
         }
     }
 }

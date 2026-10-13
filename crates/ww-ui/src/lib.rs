@@ -2,6 +2,7 @@ mod assets;
 mod common;
 mod event;
 mod model;
+mod preferences;
 pub mod ui;
 mod ui_config;
 
@@ -68,6 +69,9 @@ pub fn run() {
         .with_assets(assets::AppAssets::new("assets"))
         .run(|cx| {
             gpui_component::init(cx);
+            cx.set_global(preferences::PreferenceStore::load(
+                preferences::PreferenceStore::default_path(),
+            ));
 
             let window_size = config.get_window_size();
             let window_min_size = config.get_window_min_size();
@@ -99,9 +103,9 @@ pub fn run() {
                 .open_window(options, |window, cx| {
                     Theme::global_mut(cx).primary = green();
 
-                    let config = ui_config::get().get_common_config();
-                    Theme::global_mut(cx).font_family = config.get_font_family().into();
-                    Theme::global_mut(cx).font_size = config.get_font_size().into();
+                    let preferences = preferences::PreferenceStore::get(cx).clone();
+                    Theme::global_mut(cx).font_family = preferences.font_family.into();
+                    Theme::global_mut(cx).font_size = preferences.font_size.into();
 
                     let view = cx.new(|cx| App::new(cx, window));
                     cx.new(|cx| Root::new(view, window, cx))

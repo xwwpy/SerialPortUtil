@@ -23,10 +23,12 @@ pub struct PortPanelConfig {
 
 impl PortPanelConfig {
     pub fn get_port_update_interval(&self) -> u64 {
-        self.port_update_interval.unwrap_or_else(|| {
-            tracing::info!("没有配置端口更新间隔，使用默认值：1");
-            1
-        })
+        self.port_update_interval
+            .unwrap_or_else(|| {
+                tracing::info!("没有配置端口更新间隔，使用默认值：1");
+                500
+            })
+            .max(250)
     }
 
     pub fn get_default_baud_rate(&self) -> u32 {
@@ -37,14 +39,24 @@ impl PortPanelConfig {
     }
 
     pub fn get_read_timeout_timeout(&self) -> u64 {
-        self.read_timeout.unwrap_or_else(|| {
-            tracing::info!("没有配置打开串口超时时间，使用默认值：1000");
-            1000
-        })
+        self.read_timeout
+            .unwrap_or_else(|| {
+                tracing::info!("没有配置打开串口超时时间，使用默认值：1000");
+                100
+            })
+            .clamp(10, 1000)
     }
 
     pub fn get_baud_rate_default_vec(&self) -> Vec<BaudRateItem> {
-        self.baud_rate_default_vec.as_ref().unwrap().clone()
+        self.baud_rate_default_vec
+            .clone()
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| {
+                [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
+                    .into_iter()
+                    .map(BaudRateItem::from)
+                    .collect()
+            })
     }
 }
 

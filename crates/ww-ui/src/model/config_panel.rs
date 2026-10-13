@@ -20,7 +20,7 @@ impl SelectItem for FontFamilyItem {
 }
 
 /// encoding_rs 支持的编码方式
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Supported {
     Utf8,
     Gbk,
@@ -174,7 +174,7 @@ impl SelectItem for EncodingItem {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum AutoAppendItem {
     None,
     CrLf,

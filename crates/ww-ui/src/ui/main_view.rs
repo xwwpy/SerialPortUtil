@@ -1,19 +1,21 @@
+use crate::ui_config;
+use gpui::StatefulInteractiveElement;
 use std::time::Duration;
 
 use crate::event::{OpenStateChanged, ReceivedData, UpdatePortsInfo};
+use crate::preferences::{Layout, PreferenceStore, Preset};
 use crate::ui::config_panel::{FontConfigPanel, TxRxConfigPanel};
 use crate::ui::info::Info;
 use crate::ui::io_panel::IoPanel;
 use crate::ui::port_panel::PortPanel;
 use crate::ui::title_bar::TitleBar;
-use crate::ui_config;
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AppContext, AsyncApp, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
     IntoElement, ParentElement, Render, Styled, WeakEntity, Window, div, rgb, white,
 };
-use gpui_component::scroll::ScrollableElement;
+use gpui_component::{Disableable, StyledExt};
 
 impl EventEmitter<UpdatePortsInfo> for MainView {}
 
@@ -26,10 +28,13 @@ pub struct MainView {
     font_config_panel: Entity<FontConfigPanel>,
     tx_rx_config_panel: Entity<TxRxConfigPanel>,
     info: Entity<Info>,
+    view_options_open: bool,
 }
 
 impl MainView {
     pub fn new(cx: &mut Context<Self>, window: &mut gpui::Window) -> Self {
+        cx.observe_global::<PreferenceStore>(|_, cx| cx.notify())
+            .detach();
         let main_view_entity = cx.entity();
 
         let io_panel = cx.new(|cx| IoPanel::new(cx, window));
@@ -86,6 +91,13 @@ impl MainView {
         });
 
         let info_entity = cx.new(|cx| Info::new(cx, io_panel.clone()));
+        cx.observe(&port_panel, |_, _, cx| cx.notify()).detach();
+        let status = info_entity.clone();
+        cx.observe(&io_panel, move |_, _, cx| {
+            status.update(cx, |_, cx| cx.notify());
+            cx.notify();
+        })
+        .detach();
 
         Self {
             title_bar: cx.new(|cx| TitleBar::new(cx)),
@@ -96,131 +108,278 @@ impl MainView {
             tx_rx_config_panel: cx.new(|cx| TxRxConfigPanel::new(window, cx, io_panel.clone())),
             io_panel: io_panel,
             info: info_entity,
+            view_options_open: false,
         }
     }
 }
 
 impl Render for MainView {
-    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let config = ui_config::get().get_common_config();
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui::px;
+        use gpui_component::{
+            button::{Button, ButtonVariants},
+            checkbox::Checkbox,
+        };
+        let settings = PreferenceStore::get(cx).clone();
+        let layout = settings.layout;
+        let narrow = window.viewport_size().width < px(900.);
+        let connected = self.port_panel.read(cx).open_state;
+        let closing = self.port_panel.read(cx).closing;
         div()
             .size_full()
             .flex()
             .flex_col()
-            .items_center()
-            .justify_around()
-            .gap_1()
-            // title bar
+            .bg(rgb(0xf4f5f8))
+            .text_color(rgb(0x243047))
             .child(
                 div()
-                    .id("TitleBar")
                     .w_full()
-                    .flex()
-                    .flex_grow(0.)
+                    .h(px(34.))
                     .flex_shrink_0()
-                    .justify_center()
-                    .items_center()
-                    .border_1()
-                    .border_color(rgb(config.get_default_border_color()))
                     .bg(white())
-                    .shadow_md()
-                    .rounded_md()
                     .child(self.title_bar.clone()),
             )
-            // main content
             .child(
                 div()
                     .w_full()
                     .flex()
-                    .flex_grow_1()
-                    .min_h_0()
-                    .justify_center()
                     .items_center()
-                    .rounded_md()
+                    .flex_wrap()
+                    .gap_2()
+                    .px_4()
+                    .py_2()
+                    .bg(white())
+                    .border_b_1()
+                    .border_color(rgb(0xe5e7eb))
+                    .child(div().font_semibold().child("SerialPortUtil"))
+                    .child(div().flex_1())
                     .child(
                         div()
-                            .size_full()
-                            .flex()
-                            .gap_2()
-                            .p_2()
-                            .items_center()
-                            .justify_start()
-                            .child(
-                                // 这里套一层是为了解决加上overflow_y_scrollbar导致的宽度异常
-                                div().h_full().w_1_3().child(
-                                    div()
-                                        .size_full()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_4()
-                                        .p_2()
-                                        .track_focus(&self.left_focus_handle)
-                                        .overflow_y_scrollbar()
-                                        .rounded_md()
-                                        .border_1()
-                                        .when_else(
-                                            self.left_focus_handle.is_focused(window),
-                                            |div| {
-                                                div.border_color(rgb(
-                                                    config.get_focus_border_color()
-                                                ))
-                                            },
-                                            |div| {
-                                                div.border_color(rgb(
-                                                    config.get_default_border_color()
-                                                ))
-                                            },
-                                        )
-                                        .child(self.port_panel.clone())
-                                        .child(self.tx_rx_config_panel.clone())
-                                        .child(self.font_config_panel.clone()),
-                                ),
-                            )
-                            .child(
-                                div().h_full().w_2_3().child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .size_full()
-                                        .gap_4()
-                                        .track_focus(&self.right_focus_handle)
-                                        .overflow_y_scrollbar()
-                                        .rounded_md()
-                                        .border_1()
-                                        .when_else(
-                                            self.right_focus_handle.is_focused(window),
-                                            |div| {
-                                                div.border_color(rgb(
-                                                    config.get_focus_border_color()
-                                                ))
-                                            },
-                                            |div| {
-                                                div.border_color(rgb(
-                                                    config.get_default_border_color()
-                                                ))
-                                            },
-                                        )
-                                        .child(self.io_panel.clone()),
-                                ),
-                            ),
+                            .text_sm()
+                            .text_color(if connected {
+                                rgb(0x16803c)
+                            } else {
+                                rgb(0x64748b)
+                            })
+                            .child(if closing {
+                                "正在关闭连接"
+                            } else if connected {
+                                "● 串口已连接"
+                            } else {
+                                "○ 未连接"
+                            }),
+                    )
+                    .child(
+                        Button::new("quick-connect")
+                            .label(if connected { "断开" } else { "连接" })
+                            .disabled(closing)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.port_panel.update(cx, |panel, cx| {
+                                    if panel.open_state {
+                                        panel.close_port(cx);
+                                    } else {
+                                        panel.open_port(cx, window);
+                                    }
+                                });
+                            })),
+                    )
+                    .child(
+                        Button::new("view-options")
+                            .label("视图 / 布局")
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.view_options_open = !this.view_options_open;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("restore-layout")
+                            .label("恢复默认")
+                            .ghost()
+                            .on_click(|_, _, cx| {
+                                PreferenceStore::update(cx, |s| s.layout = Layout::default())
+                            }),
                     ),
+            )
+            .when(self.view_options_open, |view| {
+                let mut options = div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .px_4()
+                    .py_2()
+                    .bg(white())
+                    .border_b_1()
+                    .border_color(rgb(0xe5e7eb))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_2()
+                            .items_center()
+                            .child("工作区预设")
+                            .children(
+                                [
+                                    (Preset::Standard, "标准调试"),
+                                    (Preset::Analysis, "数据分析"),
+                                    (Preset::Compact, "精简"),
+                                ]
+                                .into_iter()
+                                .enumerate()
+                                .map(|(i, (preset, label))| {
+                                    Button::new(("preset", i)).label(label).on_click(
+                                        move |_, _, cx| {
+                                            PreferenceStore::update(cx, |s| {
+                                                s.layout = Layout::preset(preset)
+                                            })
+                                        },
+                                    )
+                                }),
+                            ),
+                    );
+                let mut toggles = div().flex().flex_wrap().gap_4().text_sm();
+                for (index, label, checked) in [
+                    (0, "串口配置", layout.port),
+                    (1, "收发编码", layout.encoding),
+                    (2, "字体设置", layout.font),
+                    (3, "接收日志", layout.receive),
+                    (4, "发送日志", layout.transmit),
+                    (5, "发送编辑器", layout.editor),
+                    (6, "数据波形", layout.waveform),
+                    (7, "状态栏", layout.status),
+                ] {
+                    toggles = toggles.child(
+                        Checkbox::new(("visible", index as usize))
+                            .label(label)
+                            .checked(checked)
+                            .on_click(move |checked, _, cx| {
+                                PreferenceStore::update(cx, |s| match index {
+                                    0 => s.layout.port = *checked,
+                                    1 => s.layout.encoding = *checked,
+                                    2 => s.layout.font = *checked,
+                                    3 => s.layout.receive = *checked,
+                                    4 => s.layout.transmit = *checked,
+                                    5 => s.layout.editor = *checked,
+                                    6 => s.layout.waveform = *checked,
+                                    _ => s.layout.status = *checked,
+                                })
+                            }),
+                    );
+                }
+                options = options.child(toggles);
+                view.child(options)
+            })
+            .when_some(
+                cx.global::<PreferenceStore>().message.clone(),
+                |view, message| {
+                    view.child(
+                        div()
+                            .p_2()
+                            .text_sm()
+                            .text_color(rgb(0xb42318))
+                            .child(message),
+                    )
+                },
             )
             .child(
                 div()
-                    .w_full()
+                    .id("workspace")
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
                     .flex()
-                    .flex_grow_0()
-                    .flex_shrink_0()
-                    .justify_center()
-                    .items_center()
-                    .border_1()
-                    .border_color(rgb(config.get_default_border_color()))
-                    .bg(white())
-                    .shadow_md()
-                    .rounded_md()
-                    .window_control_area(gpui::WindowControlArea::Drag)
-                    .child(self.info.clone()),
+                    .gap_3()
+                    .p_3()
+                    .when(narrow, |view| view.flex_col().overflow_y_scroll())
+                    .when(layout.has_config(), |view| {
+                        view.child(
+                            div()
+                                .id("config-column")
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .min_w_0()
+                                .when_else(
+                                    narrow,
+                                    |view| view.w_full().flex_shrink_0(),
+                                    |view| {
+                                        view.w(px(310.))
+                                            .h_full()
+                                            .flex_shrink_0()
+                                            .overflow_y_scroll()
+                                    },
+                                )
+                                .track_focus(&self.left_focus_handle)
+                                .when(layout.port, |view| view.child(self.port_panel.clone()))
+                                .when(layout.encoding, |view| {
+                                    view.child(self.tx_rx_config_panel.clone())
+                                })
+                                .when(layout.font, |view| {
+                                    view.child(self.font_config_panel.clone())
+                                }),
+                        )
+                    })
+                    .when(layout.has_work(), |view| {
+                        view.child(
+                            div()
+                                .id("work-column")
+                                .flex_1()
+                                .min_w_0()
+                                .min_h_0()
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .when(narrow, |view| view.flex_shrink_0().min_h(px(420.)))
+                                .track_focus(&self.right_focus_handle)
+                                .when(layout.receive || layout.transmit || layout.editor, |view| {
+                                    view.child(self.io_panel.clone())
+                                })
+                                .when(layout.waveform, |view| {
+                                    view.child(
+                                        div()
+                                            .p_4()
+                                            .bg(white())
+                                            .rounded_md()
+                                            .child("数据波形面板将在数据分析阶段接入"),
+                                    )
+                                }),
+                        )
+                    })
+                    .when(!layout.has_work() && !layout.has_config(), |view| {
+                        view.child(
+                            div()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .items_center()
+                                .justify_center()
+                                .child("当前工作区的所有面板均已隐藏")
+                                .child(
+                                    Button::new("empty-restore").label("恢复标准布局").on_click(
+                                        |_, _, cx| {
+                                            PreferenceStore::update(cx, |s| {
+                                                s.layout = Layout::default()
+                                            })
+                                        },
+                                    ),
+                                ),
+                        )
+                    }),
             )
+            .when(layout.status, |view| {
+                view.child(
+                    div()
+                        .w_full()
+                        .flex_shrink_0()
+                        .bg(white())
+                        .py_1()
+                        .border_t_1()
+                        .border_color(rgb(0xe5e7eb))
+                        .child(self.info.clone()),
+                )
+            })
     }
 }
 

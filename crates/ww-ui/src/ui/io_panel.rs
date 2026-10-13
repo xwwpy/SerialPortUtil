@@ -4,20 +4,20 @@ use std::sync::{
 };
 
 use encoding_rs::{Decoder, Encoder};
+use gpui::IntoElement;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyWindowHandle, AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable,
-    InteractiveElement, ParentElement, Render, Styled, Subscription, Window, actions, blue, div,
-    green, rgb, white,
+    AnyWindowHandle, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement,
+    ParentElement, Render, Styled, Subscription, Window, actions, blue, div, green, rgb, white,
 };
 use gpui_component::button::Button;
 use gpui_component::checkbox::Checkbox;
 use gpui_component::input::{Copy, Input, InputState, RopeExt, SelectAll};
-use gpui_component::label::Label;
-use gpui_component::{Disableable, StyledExt, gray};
+use gpui_component::{Disableable, StyledExt};
 use ww_protocol::SerialPort;
 
 use crate::model::config_panel::{AutoAppendItem, Supported};
+use crate::preferences::PreferenceStore;
 use crate::ui_config;
 
 actions!([ClearPortInputText, ClearUserInputText, ClearUserShowText]);
@@ -29,9 +29,6 @@ pub struct IoPanel {
     pub port_input_state: Entity<InputState>,      // 端口输入内容展示面板
     pub user_input_show_state: Entity<InputState>, // 用户输入内容展示面板
     user_input_state: Entity<InputState>,
-
-    show_port_input_content: bool,
-    show_user_input_content: bool,
 
     port_input_focus_handle: FocusHandle,
     user_input_focus_handle: FocusHandle,
@@ -69,253 +66,205 @@ pub struct IoPanel {
 }
 
 impl Render for IoPanel {
-    fn render(
-        &mut self,
-        window: &mut gpui::Window,
-        cx: &mut gpui::prelude::Context<Self>,
-    ) -> impl gpui::prelude::IntoElement {
-        let config = ui_config::get().get_common_config();
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = PreferenceStore::get(cx).layout.clone();
+        let narrow = window.viewport_size().width < gpui::px(1000.);
+        let mut logs = div()
+            .flex_1()
+            .min_h(gpui::px(180.))
+            .min_w_0()
+            .flex()
+            .gap_3()
+            .when(narrow, |view| view.flex_col());
+        if layout.receive {
+            logs = logs.child(self.log_view(true, cx));
+        }
+        if layout.transmit {
+            logs = logs.child(self.log_view(false, cx));
+        }
         div()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
             .flex()
             .flex_col()
-            .gap_4()
-            .p_2()
-            .size_full()
+            .gap_3()
             .on_action(cx.listener(Self::clear_port_input_text))
             .on_action(cx.listener(Self::clear_user_input_text))
             .on_action(cx.listener(Self::clear_user_input_show_text))
             .when_some(self.last_error.clone(), |view, message| {
-                view.child(div().p_2().text_color(rgb(0xb42318)).child(message))
+                view.child(
+                    div()
+                        .p_2()
+                        .rounded_md()
+                        .bg(rgb(0xfef3f2))
+                        .text_color(rgb(0xb42318))
+                        .child(message),
+                )
             })
-            // output view
+            .when(layout.receive || layout.transmit, |view| view.child(logs))
+            .when(layout.receive || layout.transmit, |view| {
+                view.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_3()
+                        .text_sm()
+                        .px_2()
+                        .track_focus(&self.info_config_focus_handle)
+                        .child(
+                            Checkbox::new("auto-scroll")
+                                .label("自动滚动")
+                                .checked(self.whether_auto_scroll_to_bottom)
+                                .on_click(cx.listener(|this, checked, _, cx| {
+                                    this.whether_auto_scroll_to_bottom = *checked;
+                                    PreferenceStore::update(cx, |s| s.auto_scroll = *checked);
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            Checkbox::new("timestamp")
+                                .label("时间戳")
+                                .checked(self.whether_add_timestamp)
+                                .on_click(cx.listener(|this, checked, _, cx| {
+                                    this.whether_add_timestamp = *checked;
+                                    PreferenceStore::update(cx, |s| s.timestamp = *checked);
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            Checkbox::new("simple-time")
+                                .label("精简时间")
+                                .checked(self.simple_time_show)
+                                .on_click(cx.listener(|this, checked, _, cx| {
+                                    this.simple_time_show = *checked;
+                                    PreferenceStore::update(cx, |s| s.simple_time = *checked);
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            })
+            .when(layout.editor, |view| {
+                view.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_3()
+                        .bg(white())
+                        .rounded_md()
+                        .shadow_sm()
+                        .flex_shrink_0()
+                        .track_focus(&self.user_input_focus_handle)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().font_semibold().child("发送编辑器"))
+                                .child(div().flex_1())
+                                .child(Button::new("clear-editor").label("清空").on_click(
+                                    cx.listener(|this, _, window, cx| {
+                                        this.clear_user_input_text(&ClearUserInputText, window, cx)
+                                    }),
+                                ))
+                                .child(
+                                    Button::new("submit")
+                                        .label(if self.last_send_completed {
+                                            "发送"
+                                        } else {
+                                            "正在发送…"
+                                        })
+                                        .disabled(
+                                            !self.port_open_state || !self.last_send_completed,
+                                        )
+                                        .on_click(cx.listener(submit_user_input)),
+                                ),
+                        )
+                        .child(
+                            Input::new(&self.user_input_state)
+                                .h(gpui::px(100.))
+                                .w_full()
+                                .text_color(blue())
+                                .context_menu(|menu, _, _| {
+                                    menu.menu("复制", Box::new(Copy))
+                                        .menu("全选", Box::new(SelectAll))
+                                        .menu("清空文本", Box::new(ClearUserInputText))
+                                }),
+                        ),
+                )
+            })
+    }
+}
+
+impl IoPanel {
+    fn log_view(&self, receive: bool, cx: &mut Context<Self>) -> impl IntoElement {
+        let (label, state, focus) = if receive {
+            (
+                "接收日志 · Rx",
+                &self.port_input_state,
+                &self.port_input_focus_handle,
+            )
+        } else {
+            (
+                "发送日志 · Tx",
+                &self.user_input_show_state,
+                &self.user_input_focus_handle,
+            )
+        };
+        div()
+            .flex_1()
+            .min_h(gpui::px(160.))
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .bg(white())
+            .rounded_md()
+            .shadow_sm()
+            .track_focus(focus)
             .child(
                 div()
                     .flex()
+                    .items_center()
                     .gap_2()
-                    .h_2_3()
-                    .p_2()
-                    .bg(white())
-                    .shadow_md()
-                    .rounded_md()
+                    .child(div().font_semibold().child(label))
+                    .child(div().flex_1())
                     .child(
-                        div()
-                            .flex()
-                            .size_full()
-                            .flex_grow_0()
-                            .rounded_md()
-                            .p_2()
-                            .gap_2()
-                            .track_focus(&self.port_input_focus_handle)
-                            .border_1()
-                            .when_else(
-                                self.port_input_focus_handle.is_focused(window)
-                                    || self.port_input_state.focus_handle(cx).is_focused(window)
-                                    || self
-                                        .user_input_show_state
-                                        .focus_handle(cx)
-                                        .is_focused(window),
-                                |div| div.border_color(rgb(config.get_focus_border_color())),
-                                |div| div.border_color(rgb(config.get_default_border_color())),
-                            )
-                            .when(self.show_port_input_content, |div| {
-                                div.child(
-                                    Input::new(&self.port_input_state)
-                                        .h_full()
-                                        .disabled(true)
-                                        .text_color(green())
-                                        .context_menu(|menu, _window, _cx| {
-                                            menu.menu("复制", Box::new(Copy))
-                                                .separator()
-                                                .menu("全选", Box::new(SelectAll))
-                                                .separator()
-                                                .menu("清空文本", Box::new(ClearPortInputText))
-                                        }),
-                                )
-                            })
-                            .when(self.show_user_input_content, |div| {
-                                div.child(
-                                    Input::new(&self.user_input_show_state)
-                                        .h_full()
-                                        .disabled(true)
-                                        .text_color(blue())
-                                        .context_menu(|menu, _window, _cx| {
-                                            menu.menu("复制", Box::new(Copy))
-                                                .separator()
-                                                .menu("全选", Box::new(SelectAll))
-                                                .separator()
-                                                .menu("清空文本", Box::new(ClearUserShowText))
-                                        }),
-                                )
-                            }),
+                        Button::new(if receive { "copy-rx" } else { "copy-tx" })
+                            .label("复制")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let state = if receive {
+                                    &this.port_input_state
+                                } else {
+                                    &this.user_input_show_state
+                                };
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                    state.read(cx).value().to_string(),
+                                ));
+                            })),
+                    )
+                    .child(
+                        Button::new(if receive { "clear-rx" } else { "clear-tx" })
+                            .label("清空")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                if receive {
+                                    this.clear_port_input_text(&ClearPortInputText, window, cx);
+                                } else {
+                                    this.clear_user_input_show_text(&ClearUserShowText, window, cx);
+                                }
+                            })),
                     ),
             )
-            // info view
             .child(
-                div()
-                    .flex_grow_0()
-                    .p_2()
-                    .bg(white())
-                    .shadow_md()
-                    .rounded_md()
-                    .child(
-                        div()
-                            .size_full()
-                            .flex()
-                            .items_center()
-                            .justify_evenly()
-                            .p_2()
-                            .border_1()
-                            .track_focus(&self.info_config_focus_handle)
-                            .when_else(
-                                self.info_config_focus_handle.is_focused(window),
-                                |div| div.border_color(rgb(config.get_focus_border_color())),
-                                |div| div.border_color(rgb(config.get_default_border_color())),
-                            )
-                            .gap_4()
-                            .text_sm()
-                            .rounded_md()
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .items_center()
-                                    .overflow_hidden()
-                                    .flex_wrap()
-                                    .child(Label::new("Rx："))
-                                    .child(
-                                        Checkbox::new("WhetherShowRxData")
-                                            .checked(self.show_port_input_content)
-                                            .on_click(cx.listener(|this, checked, window, cx| {
-                                                this.show_port_input_content = *checked;
-                                                this.focus_info_config(window, cx);
-                                                cx.notify();
-                                            }))
-                                            .cursor_pointer(),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .items_center()
-                                    .overflow_hidden()
-                                    .flex_wrap()
-                                    .child(Label::new("Tx："))
-                                    .child(
-                                        Checkbox::new("WhetherShowTxData")
-                                            .checked(self.show_user_input_content)
-                                            .on_click(cx.listener(|this, checked, window, cx| {
-                                                this.show_user_input_content = *checked;
-                                                this.focus_info_config(window, cx);
-                                                cx.notify();
-                                            }))
-                                            .cursor_pointer(),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .items_center()
-                                    .overflow_hidden()
-                                    .flex_wrap()
-                                    .child(Label::new("自动滚动到底部："))
-                                    .child(
-                                        Checkbox::new("auto_scroll_to_button")
-                                            .checked(self.whether_auto_scroll_to_bottom)
-                                            .on_click(cx.listener(|this, checked, window, cx| {
-                                                this.whether_auto_scroll_to_bottom = *checked;
-                                                this.focus_info_config(window, cx);
-                                                cx.notify();
-                                            }))
-                                            .cursor_pointer(),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .items_center()
-                                    .overflow_hidden()
-                                    .flex_wrap()
-                                    .child(Label::new("添加时间戳："))
-                                    .child(
-                                        Checkbox::new("add_timestamp")
-                                            .checked(self.whether_add_timestamp)
-                                            .on_click(cx.listener(|this, checked, window, cx| {
-                                                this.whether_add_timestamp = *checked;
-                                                this.focus_info_config(window, cx);
-                                                cx.notify();
-                                            }))
-                                            .cursor_pointer(),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .items_center()
-                                    .overflow_hidden()
-                                    .flex_wrap()
-                                    .child(Label::new("精简时间："))
-                                    .child(
-                                        Checkbox::new("simple_time_show")
-                                            .checked(self.simple_time_show)
-                                            .on_click(cx.listener(|this, checked, window, cx| {
-                                                this.simple_time_show = *checked;
-                                                this.focus_info_config(window, cx);
-                                                cx.notify();
-                                            }))
-                                            .cursor_pointer(),
-                                    ),
-                            ),
-                    ),
-            )
-            // input view
-            .child(
-                div()
-                    .flex_1()
-                    .p_2()
-                    .bg(white())
-                    .shadow_md()
-                    .rounded_md()
-                    .child(
-                        div()
-                            .flex()
-                            .size_full()
-                            .border_1()
-                            .rounded_md()
-                            .p_2()
-                            .gap_4()
-                            .items_center()
-                            .overflow_hidden()
-                            .justify_evenly()
-                            .track_focus(&self.user_input_focus_handle)
-                            .when_else(
-                                self.user_input_focus_handle.is_focused(window)
-                                    || self.user_input_state.focus_handle(cx).is_focused(window),
-                                |div| div.border_color(rgb(config.get_focus_border_color())),
-                                |div| div.border_color(rgb(config.get_default_border_color())),
-                            )
-                            .child(
-                                Input::new(&self.user_input_state)
-                                    .size_full()
-                                    .text_color(blue())
-                                    .border_color(gray(100))
-                                    .context_menu(|menu, _window, _cx| {
-                                        menu.menu("复制", Box::new(Copy))
-                                            .separator()
-                                            .menu("全选", Box::new(SelectAll))
-                                            .separator()
-                                            .menu("清空文本", Box::new(ClearUserInputText))
-                                    }),
-                            )
-                            .child(
-                                Button::new("submit")
-                                    .label("发送")
-                                    .when_else(
-                                        self.port_open_state && self.last_send_completed,
-                                        |btn| btn.cursor_pointer(),
-                                        |btn| btn.disabled(true).cursor_not_allowed(),
-                                    )
-                                    .on_click(cx.listener(submit_user_input)),
-                            ),
-                    ),
+                div().flex_1().min_h_0().child(
+                    Input::new(state)
+                        .size_full()
+                        .disabled(true)
+                        .text_color(if receive { green() } else { blue() }),
+                ),
             )
     }
 }
@@ -437,10 +386,11 @@ impl IoPanel {
 
 impl IoPanel {
     pub fn new(cx: &mut gpui::prelude::Context<Self>, window: &mut Window) -> Self {
-        let config = ui_config::get().get_common_config();
-
-        let encoding: Supported = config.get_encoding().into();
-        let decoding: Supported = config.get_decoding().into();
+        let settings = PreferenceStore::get(cx).clone();
+        cx.observe_global::<PreferenceStore>(|_, cx| cx.notify())
+            .detach();
+        let encoding = settings.encoding;
+        let decoding = settings.decoding;
 
         let io_panel_config = ui_config::get().get_io_panel_config();
 
@@ -474,22 +424,18 @@ impl IoPanel {
             user_input_show_state,
             user_input_state,
             port_input_focus_handle: cx.focus_handle(),
-            show_port_input_content: true,
-            show_user_input_content: true,
+
             user_input_focus_handle: cx.focus_handle(),
             info_config_focus_handle: cx.focus_handle(),
-            whether_auto_scroll_to_bottom: true,
-            whether_add_timestamp: true,
-            simple_time_show: true,
+            whether_auto_scroll_to_bottom: settings.auto_scroll,
+            whether_add_timestamp: settings.timestamp,
+            simple_time_show: settings.simple_time,
             encoding,
             encoder: encoding.encoding().map(|e| e.new_encoder()),
             decoding,
             decoder: decoding.encoding().map(|e| e.new_decoder()),
 
-            auto_tx_append: ui_config::get()
-                .get_common_config()
-                .get_default_auto_tx_append_item()
-                .into(),
+            auto_tx_append: settings.append,
 
             _receive_data_subscription: None,
             _open_state_observer_subscription: None,
@@ -553,10 +499,6 @@ impl IoPanel {
             state.set_value("", window, cx);
         });
         self.user_input_line_has_bytes = false;
-    }
-
-    fn focus_info_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.info_config_focus_handle.focus(window, cx);
     }
 
     fn focus_user_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {

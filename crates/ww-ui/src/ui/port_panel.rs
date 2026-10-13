@@ -5,6 +5,7 @@ use crate::event::{OpenStateChanged, PortError, ReceivedData};
 use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, PortMessage, StopBitsItem, port_read_loop,
 };
+use crate::preferences::PreferenceStore;
 
 use crate::ui::io_panel::IoPanel;
 use crate::ui_config::{self, LABLE_SIZE};
@@ -17,7 +18,7 @@ use gpui::{
 use gpui_component::button::Button;
 use gpui_component::dialog::DialogButtonProps;
 use gpui_component::label::Label;
-use gpui_component::select::{SearchableVec, Select, SelectItem, SelectState};
+use gpui_component::select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState};
 use gpui_component::{Disableable, IndexPath, WindowExt};
 
 use ww_protocol::{get_ports, model::Ports};
@@ -69,7 +70,7 @@ impl PortPanel {
             });
         })
         .detach();
-        Self {
+        let panel = Self {
             window: window.window_handle(),
             io_panel,
             ports: Ports::new(),
@@ -86,19 +87,86 @@ impl PortPanel {
             data_bit_select: Self::get_databits_items(window, cx),
             stop_bit_select: Self::get_stopbits_items(window, cx),
             cancel_flag: Arc::new(AtomicBool::new(false)),
-        }
+        };
+        cx.subscribe(
+            &panel.port_info_select,
+            |_, _, event: &SelectEvent<SearchableVec<PortInfoItem>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    PreferenceStore::update(cx, |s| s.port_name = value.clone());
+                }
+            },
+        )
+        .detach();
+        cx.subscribe(
+            &panel.band_rate_select,
+            |_, _, event: &SelectEvent<SearchableVec<BaudRateItem>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    PreferenceStore::update(cx, |s| s.baud_rate = *value);
+                }
+            },
+        )
+        .detach();
+        cx.subscribe(
+            &panel.parity_select,
+            |_, _, event: &SelectEvent<SearchableVec<ParityItem>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    PreferenceStore::update(cx, |s| {
+                        s.parity = match value {
+                            ParityItem::None => "none",
+                            ParityItem::Odd => "odd",
+                            ParityItem::Even => "even",
+                        }
+                        .into()
+                    });
+                }
+            },
+        )
+        .detach();
+        cx.subscribe(
+            &panel.data_bit_select,
+            |_, _, event: &SelectEvent<SearchableVec<DataBitsItem>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    PreferenceStore::update(cx, |s| {
+                        s.data_bits = match value {
+                            DataBitsItem::Five => 5,
+                            DataBitsItem::Six => 6,
+                            DataBitsItem::Seven => 7,
+                            DataBitsItem::Eight => 8,
+                        }
+                    });
+                }
+            },
+        )
+        .detach();
+        cx.subscribe(
+            &panel.stop_bit_select,
+            |_, _, event: &SelectEvent<SearchableVec<StopBitsItem>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    PreferenceStore::update(cx, |s| {
+                        s.stop_bits = match value {
+                            StopBitsItem::One => 1,
+                            StopBitsItem::Two => 2,
+                        }
+                    });
+                }
+            },
+        )
+        .detach();
+        panel
     }
 
     pub fn default_baud_rate(
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<SelectState<SearchableVec<BaudRateItem>>> {
-        let config = ui_config::get();
-        let vec = config
+        let default_select_value = PreferenceStore::get(cx).baud_rate;
+        let mut values = ui_config::get()
             .get_port_panel_config()
-            .get_baud_rate_default_vec()
-            .into();
-        let default_select_value = config.get_port_panel_config().get_default_baud_rate();
+            .get_baud_rate_default_vec();
+        if !values.iter().any(|v| *v.value() == default_select_value) {
+            values.push(default_select_value.into());
+        }
+        let vec = values.into();
         cx.new(move |cx| {
             let mut res = SelectState::new(vec, None, window, cx);
             res.set_selected_value(&default_select_value, window, cx);
@@ -110,10 +178,15 @@ impl PortPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<SelectState<SearchableVec<ParityItem>>> {
+        let selected = match PreferenceStore::get(cx).parity.as_str() {
+            "odd" => ParityItem::Odd,
+            "even" => ParityItem::Even,
+            _ => ParityItem::None,
+        };
         let vec = vec![ParityItem::None, ParityItem::Odd, ParityItem::Even].into();
         cx.new(move |cx| {
             let mut res = SelectState::new(vec, None, window, cx);
-            res.set_selected_value(&ParityItem::None, window, cx);
+            res.set_selected_value(&selected, window, cx);
             res
         })
     }
@@ -122,6 +195,12 @@ impl PortPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<SelectState<SearchableVec<DataBitsItem>>> {
+        let selected = match PreferenceStore::get(cx).data_bits {
+            5 => DataBitsItem::Five,
+            6 => DataBitsItem::Six,
+            7 => DataBitsItem::Seven,
+            _ => DataBitsItem::Eight,
+        };
         let vec = vec![
             DataBitsItem::Five,
             DataBitsItem::Six,
@@ -131,7 +210,7 @@ impl PortPanel {
         .into();
         cx.new(move |cx| {
             let mut res = SelectState::new(vec, None, window, cx);
-            res.set_selected_value(&DataBitsItem::Eight, window, cx);
+            res.set_selected_value(&selected, window, cx);
             res
         })
     }
@@ -140,10 +219,15 @@ impl PortPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<SelectState<SearchableVec<StopBitsItem>>> {
+        let selected = if PreferenceStore::get(cx).stop_bits == 2 {
+            StopBitsItem::Two
+        } else {
+            StopBitsItem::One
+        };
         let vec = vec![StopBitsItem::One, StopBitsItem::Two].into();
         cx.new(move |cx| {
             let mut res = SelectState::new(vec, None, window, cx);
-            res.set_selected_value(&StopBitsItem::One, window, cx);
+            res.set_selected_value(&selected, window, cx);
             res
         })
     }
@@ -169,7 +253,12 @@ impl PortPanel {
         self.ports.update_ports_info(ports.clone());
 
         // 获取当前选中的串口信息
-        let selected_value = self.port_info_select.read(cx).selected_value();
+        let selected_value = self
+            .port_info_select
+            .read(cx)
+            .selected_value()
+            .cloned()
+            .or_else(|| Some(PreferenceStore::get(cx).port_name.clone()));
 
         // 根据选中的串口信息计算新的索引和选中值
         // 只有当不存在的时候才会取消选中
@@ -177,7 +266,7 @@ impl PortPanel {
             Some(v) => ports
                 .iter()
                 .enumerate()
-                .find(|(_, port)| port.port_name == *v),
+                .find(|(_, port)| port.port_name == v),
 
             None => None,
         };

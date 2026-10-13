@@ -4,10 +4,13 @@ use gpui::{
 };
 use gpui_component::{
     Theme,
+    button::Button,
     label::Label,
     select::{SearchableVec, Select, SelectEvent, SelectState},
     white,
 };
+
+use crate::preferences::PreferenceStore;
 
 use crate::{
     model::config_panel::{AutoAppendItem, DecodingItem, EncodingItem, FontFamilyItem, Supported},
@@ -31,9 +34,7 @@ impl FontConfigPanel {
             .into();
         let select_state = cx.new(|cx| SelectState::new(fonts, None, window, cx));
 
-        let config = ui_config::get();
-
-        let font_family = config.get_common_config().get_font_family();
+        let font_family = PreferenceStore::get(cx).font_family.clone();
 
         select_state.update(cx, |state, cx| {
             state.set_selected_value(&font_family, window, cx);
@@ -51,6 +52,7 @@ impl FontConfigPanel {
                 if let SelectEvent::Confirm(Some(font_name)) = event {
                     // 应用选中的字体
                     Theme::global_mut(cx).font_family = font_name.clone().into();
+                    PreferenceStore::update(cx, |s| s.font_family = font_name.clone());
                     cx.notify();
                 }
             },
@@ -98,6 +100,31 @@ impl Render for FontConfigPanel {
                     )
                     .track_focus(&self.focus_handle(cx))
                     .rounded_md()
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .items_center()
+                            .child(Label::new("字体设置"))
+                            .child(div().flex_1())
+                            .child(
+                                Button::new("font-smaller")
+                                    .label("A−")
+                                    .on_click(|_, _, cx| {
+                                        let size = PreferenceStore::get(cx)
+                                            .font_size
+                                            .saturating_sub(1)
+                                            .max(10);
+                                        Theme::global_mut(cx).font_size = size.into();
+                                        PreferenceStore::update(cx, |s| s.font_size = size);
+                                    }),
+                            )
+                            .child(Button::new("font-larger").label("A+").on_click(|_, _, cx| {
+                                let size = (PreferenceStore::get(cx).font_size + 1).min(28);
+                                Theme::global_mut(cx).font_size = size.into();
+                                PreferenceStore::update(cx, |s| s.font_size = size);
+                            })),
+                    )
                     .child(
                         div()
                             .flex()
@@ -171,6 +198,7 @@ impl Render for TxRxConfigPanel {
                     )
                     .track_focus(&self.focus_handle(cx))
                     .rounded_md()
+                    .child(Label::new("收发编码"))
                     .child(
                         div()
                             .flex()
@@ -247,7 +275,7 @@ impl TxRxConfigPanel {
         cx: &mut gpui::prelude::Context<Self>,
         io_panel: Entity<IoPanel>,
     ) -> Self {
-        let config = ui_config::get().get_common_config();
+        let settings = PreferenceStore::get(cx).clone();
         let encoding_select = cx.new(|cx| {
             SelectState::new(
                 Supported::all()
@@ -261,7 +289,7 @@ impl TxRxConfigPanel {
             )
         });
 
-        let default_encoding = config.get_encoding().into();
+        let default_encoding = settings.encoding;
         encoding_select.update(cx, |state, cx| {
             state.set_selected_value(&default_encoding, window, cx);
             cx.notify();
@@ -280,7 +308,7 @@ impl TxRxConfigPanel {
             )
         });
 
-        let default_decoding = config.get_decoding().into();
+        let default_decoding = settings.decoding;
         decoding_select.update(cx, |state, cx| {
             state.set_selected_value(&default_decoding, window, cx);
             cx.notify();
@@ -295,7 +323,8 @@ impl TxRxConfigPanel {
                  event: &SelectEvent<SearchableVec<EncodingItem>>,
                  cx| {
                     if let SelectEvent::Confirm(Some(encoding)) = event {
-                        io_panel.encoding = encoding.clone();
+                        io_panel.encoding = *encoding;
+                        PreferenceStore::update(cx, |s| s.encoding = *encoding);
                         io_panel.encoder = encoding.encoding().map(|e| e.new_encoder());
                         cx.notify();
                     }
@@ -312,7 +341,8 @@ impl TxRxConfigPanel {
                  event: &SelectEvent<SearchableVec<DecodingItem>>,
                  cx| {
                     if let SelectEvent::Confirm(Some(decoding)) = event {
-                        io_panel.decoding = decoding.clone();
+                        io_panel.decoding = *decoding;
+                        PreferenceStore::update(cx, |s| s.decoding = *decoding);
                         io_panel.decoder = decoding.encoding().map(|e| e.new_decoder());
                         cx.notify();
                     }
@@ -332,10 +362,7 @@ impl TxRxConfigPanel {
         let auto_append_to_tx_select =
             cx.new(|cx| SelectState::new(auto_append_vec, None, window, cx));
 
-        let default_auto_tx_append: AutoAppendItem = ui_config::get()
-            .get_common_config()
-            .get_default_auto_tx_append_item()
-            .into();
+        let default_auto_tx_append = settings.append;
 
         auto_append_to_tx_select.update(cx, |select, cx| {
             select.set_selected_value(&default_auto_tx_append, window, cx);
@@ -352,6 +379,7 @@ impl TxRxConfigPanel {
                  cx| {
                     if let SelectEvent::Confirm(Some(auto_tx_append)) = event {
                         io_panel.auto_tx_append = *auto_tx_append;
+                        PreferenceStore::update(cx, |s| s.append = *auto_tx_append);
                         cx.notify();
                     }
                 },

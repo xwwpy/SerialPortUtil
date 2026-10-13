@@ -29,6 +29,9 @@ pub struct IoPanel {
     pub port_input_state: Entity<InputState>,      // 端口输入内容展示面板
     pub user_input_show_state: Entity<InputState>, // 用户输入内容展示面板
     user_input_state: Entity<InputState>,
+    interval_state: Entity<InputState>,
+    timer_payload: Option<(Vec<u8>, String)>,
+    timer_task: Option<gpui::Task<()>>,
 
     port_input_focus_handle: FocusHandle,
     user_input_focus_handle: FocusHandle,
@@ -145,6 +148,29 @@ impl Render for IoPanel {
                         ),
                 )
             })
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .items_center()
+                    .text_sm()
+                    .child(format!(
+                        "Rx {} B · Tx {} B",
+                        self.port_input_received_bytes, self.user_transmit_bytes
+                    ))
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("reset-statistics")
+                            .label("重置计数")
+                            .disabled(!self.last_send_completed)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.port_input_received_bytes = 0;
+                                this.user_transmit_bytes = 0;
+                                cx.notify();
+                            })),
+                    ),
+            )
             .when(layout.editor, |view| {
                 view.child(
                     div()
@@ -191,6 +217,45 @@ impl Render for IoPanel {
                                     menu.menu("复制", Box::new(Copy))
                                         .menu("全选", Box::new(SelectAll))
                                         .menu("清空文本", Box::new(ClearUserInputText))
+                                }),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap_2()
+                                .text_sm()
+                                .child("定时发送间隔（ms）")
+                                .child(
+                                    div().w(gpui::px(100.)).child(
+                                        Input::new(&self.interval_state)
+                                            .w_full()
+                                            .disabled(self.timer_payload.is_some()),
+                                    ),
+                                )
+                                .child(
+                                    Button::new("timer-toggle")
+                                        .label(if self.timer_payload.is_some() {
+                                            "停止定时"
+                                        } else {
+                                            "启动定时"
+                                        })
+                                        .disabled(
+                                            !self.port_open_state
+                                                || (!self.last_send_completed
+                                                    && self.timer_payload.is_none()),
+                                        )
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            if this.timer_payload.is_some() {
+                                                this.stop_timer(cx);
+                                            } else {
+                                                this.start_timer(window, cx);
+                                            }
+                                        })),
+                                )
+                                .when(self.timer_payload.is_some(), |view| {
+                                    view.child("运行中 · 使用启动时内容")
                                 }),
                         ),
                 )
@@ -256,6 +321,27 @@ impl IoPanel {
                                     this.clear_user_input_show_text(&ClearUserShowText, window, cx);
                                 }
                             })),
+                    )
+                    .child(
+                        Button::new(if receive { "export-rx" } else { "export-tx" })
+                            .label("导出")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let state = if receive {
+                                    &this.port_input_state
+                                } else {
+                                    &this.user_input_show_state
+                                };
+                                crate::export::request_export(
+                                    state.read(cx).value().to_string(),
+                                    if receive {
+                                        "receive.txt"
+                                    } else {
+                                        "transmit.txt"
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            })),
                     ),
             )
             .child(
@@ -279,19 +365,9 @@ pub fn submit_user_input(
 }
 
 impl IoPanel {
-    pub fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.port_open_state || !self.last_send_completed {
-            return;
-        }
+    fn prepare_payload(&self, cx: &gpui::App) -> Result<(Vec<u8>, String), String> {
         let input = self.user_input_state.read(cx).value().to_string();
-        let mut bytes = match Self::resolve_user_input_data(self.encoding, &input) {
-            Ok(bytes) => bytes,
-            Err(message) => {
-                self.last_error = Some(message);
-                cx.notify();
-                return;
-            }
-        };
+        let mut bytes = Self::resolve_user_input_data(self.encoding, &input)?;
         let suffix = match self.auto_tx_append {
             AutoAppendItem::None => "",
             AutoAppendItem::Lf => "\n",
@@ -301,18 +377,11 @@ impl IoPanel {
         };
         bytes.extend_from_slice(suffix.as_bytes());
         if bytes.is_empty() {
-            self.last_error = Some("发送内容不能为空".into());
-            cx.notify();
-            return;
+            return Err("发送内容不能为空".into());
         }
-        let Some(mut handle) = self.port_handle.take() else {
-            return;
-        };
-        self.focus_user_input(window, cx);
-        self.last_send_completed = false;
-        self.last_error = None;
-        let session_id = self.session_id;
-        let cancel = self.send_cancel.clone();
+        if bytes.len() > 1_048_576 {
+            return Err("单次发送不能超过 1 MiB".into());
+        }
         let shown = if self.encoding == Supported::Hex {
             bytes
                 .iter()
@@ -322,6 +391,90 @@ impl IoPanel {
         } else {
             format!("{input}{suffix}")
         };
+        Ok((bytes, shown))
+    }
+
+    pub fn stop_timer(&mut self, cx: &mut Context<Self>) {
+        self.timer_task.take();
+        self.timer_payload = None;
+        cx.notify();
+    }
+
+    fn start_timer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.port_open_state || !self.last_send_completed {
+            return;
+        }
+        let interval = self
+            .interval_state
+            .read(cx)
+            .value()
+            .parse::<u64>()
+            .ok()
+            .filter(|value| (10..=3_600_000).contains(value));
+        let Some(interval) = interval else {
+            self.last_error = Some("定时发送间隔应为 10–3600000 ms".into());
+            cx.notify();
+            return;
+        };
+        let payload = match self.prepare_payload(cx) {
+            Ok(payload) => payload,
+            Err(error) => {
+                self.last_error = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+        PreferenceStore::update(cx, |s| s.interval_ms = interval);
+        self.timer_payload = Some(payload);
+        self.send(window, cx);
+        let handle = self.window;
+        self.timer_task = Some(cx.spawn(async move |entity, cx| {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(interval)).await;
+                let mut keep_running = false;
+                let result = handle.update(cx, |_, window, cx| {
+                    let _ = entity.update(cx, |panel, cx| {
+                        keep_running = panel.port_open_state && panel.timer_payload.is_some();
+                        if keep_running {
+                            panel.send(window, cx);
+                        }
+                    });
+                });
+                if result.is_err() || !keep_running {
+                    break;
+                }
+            }
+        }));
+        cx.notify();
+    }
+
+    pub fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.port_open_state || !self.last_send_completed {
+            return;
+        }
+        let (bytes, shown) = match self
+            .timer_payload
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(|| self.prepare_payload(cx))
+        {
+            Ok(payload) => payload,
+            Err(message) => {
+                self.last_error = Some(message);
+                self.stop_timer(cx);
+                return;
+            }
+        };
+        let Some(mut handle) = self.port_handle.take() else {
+            return;
+        };
+        if self.timer_payload.is_none() {
+            self.focus_user_input(window, cx);
+        }
+        self.last_send_completed = false;
+        self.last_error = None;
+        let session_id = self.session_id;
+        let cancel = self.send_cancel.clone();
         let timestamp = if self.whether_add_timestamp {
             jiff::Zoned::now()
                 .strftime(if self.simple_time_show {
@@ -354,6 +507,7 @@ impl IoPanel {
                         }
                         let status = match result.error {
                             Some(error) => {
+                                panel.stop_timer(cx);
                                 panel.last_error = Some(format!(
                                     "发送失败（已发送 {} 字节）：{error}",
                                     result.bytes_written
@@ -373,6 +527,7 @@ impl IoPanel {
                         );
                     }
                     Err(error) => {
+                        panel.stop_timer(cx);
                         panel.last_error = Some(format!("发送任务失败：{error}"));
                     }
                 }
@@ -416,7 +571,14 @@ impl IoPanel {
             state.set_soft_wrap(true, window, cx);
         });
 
+        let interval_state = cx.new(|cx| InputState::new(window, cx));
+        interval_state.update(cx, |state, cx| {
+            state.set_value(settings.interval_ms.to_string(), window, cx)
+        });
         IoPanel {
+            interval_state,
+            timer_payload: None,
+            timer_task: None,
             window: window.window_handle(),
             last_send_completed: true,
             port_handle: None,

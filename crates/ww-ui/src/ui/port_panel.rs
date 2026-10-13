@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::event::{OpenStateChanged, PortError, ReceivedData};
+use crate::event::{OpenStateChanged, PortError, ReceivedData, UpdatePortsInfo};
+use crate::model::port_model::FlowControlItem;
 use crate::model::port_model::{
     BaudRateItem, DataBitsItem, ParityItem, PortInfoItem, PortMessage, StopBitsItem, port_read_loop,
 };
@@ -21,7 +22,7 @@ use gpui_component::label::Label;
 use gpui_component::select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState};
 use gpui_component::{Disableable, IndexPath, WindowExt};
 
-use ww_protocol::{get_ports, model::Ports};
+use ww_protocol::model::Ports;
 
 pub struct PortPanel {
     window: AnyWindowHandle,
@@ -29,7 +30,10 @@ pub struct PortPanel {
     io_panel: WeakEntity<IoPanel>,
     port_open_focus_handle: FocusHandle,
     port_config_focus_handle: FocusHandle,
+    pub opening: bool,
     pub closing: bool,
+    enumeration_error: Option<String>,
+    open_task: Option<Task<()>>,
     pub open_state: bool, // 当前串口是否开启
 
     receive_task: Option<Task<()>>,
@@ -40,6 +44,7 @@ pub struct PortPanel {
     band_rate_select: Entity<SelectState<SearchableVec<BaudRateItem>>>,
     parity_select: Entity<SelectState<SearchableVec<ParityItem>>>,
     data_bit_select: Entity<SelectState<SearchableVec<DataBitsItem>>>,
+    flow_control_select: Entity<SelectState<SearchableVec<FlowControlItem>>>,
     stop_bit_select: Entity<SelectState<SearchableVec<StopBitsItem>>>,
 }
 
@@ -76,7 +81,10 @@ impl PortPanel {
             ports: Ports::new(),
             port_open_focus_handle: cx.focus_handle(),
             port_config_focus_handle: cx.focus_handle(),
+            opening: false,
             closing: false,
+            enumeration_error: None,
+            open_task: None,
             open_state: false,
             receive_task: None,
             update_info_sub: Some(update_info_sub),
@@ -86,6 +94,26 @@ impl PortPanel {
             parity_select: Self::get_parity_items(window, cx),
             data_bit_select: Self::get_databits_items(window, cx),
             stop_bit_select: Self::get_stopbits_items(window, cx),
+            flow_control_select: cx.new(|cx| {
+                let selected = match PreferenceStore::get(cx).flow_control.as_str() {
+                    "hardware" => FlowControlItem::Hardware,
+                    "software" => FlowControlItem::Software,
+                    _ => FlowControlItem::None,
+                };
+                let mut state = SelectState::new(
+                    vec![
+                        FlowControlItem::None,
+                        FlowControlItem::Hardware,
+                        FlowControlItem::Software,
+                    ]
+                    .into(),
+                    None,
+                    window,
+                    cx,
+                );
+                state.set_selected_value(&selected, window, cx);
+                state
+            }),
             cancel_flag: Arc::new(AtomicBool::new(false)),
         };
         cx.subscribe(
@@ -147,6 +175,22 @@ impl PortPanel {
                             StopBitsItem::One => 1,
                             StopBitsItem::Two => 2,
                         }
+                    });
+                }
+            },
+        )
+        .detach();
+        cx.subscribe(
+            &panel.flow_control_select,
+            |_, _, event: &SelectEvent<SearchableVec<FlowControlItem>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    PreferenceStore::update(cx, |s| {
+                        s.flow_control = match value {
+                            FlowControlItem::None => "none",
+                            FlowControlItem::Hardware => "hardware",
+                            FlowControlItem::Software => "software",
+                        }
+                        .into()
                     });
                 }
             },
@@ -232,9 +276,22 @@ impl PortPanel {
         })
     }
 
-    pub fn update_info(&mut self, cx: &mut Context<Self>) {
-        // 获取最新的串口信息
-        let ports = get_ports();
+    pub fn update_info(&mut self, event: &UpdatePortsInfo, cx: &mut Context<Self>) {
+        let ports = match &event.ports {
+            Ok(ports) => {
+                if self.enumeration_error.take().is_some() {
+                    cx.notify();
+                }
+                ports.clone()
+            }
+            Err(error) => {
+                if self.enumeration_error.as_ref() != Some(error) {
+                    self.enumeration_error = Some(error.clone());
+                    cx.notify();
+                }
+                return;
+            }
+        };
 
         // 如果没有发生变化，就直接返回
         let old_ports = self.ports.get_ports().unwrap();
@@ -308,6 +365,9 @@ impl PortPanel {
     }
 
     pub fn open_port(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        if self.opening || self.closing || self.open_state {
+            return;
+        }
         // 更新选中的串口
         // 获取串口名
         let port_name = self.port_info_select.read(cx).selected_value();
@@ -342,39 +402,50 @@ impl PortPanel {
             parity.clone(),
             data_bits.clone(),
             stop_bits.clone(),
+            self.flow_control_select
+                .read(cx)
+                .selected_value()
+                .copied()
+                .unwrap_or(FlowControlItem::None),
             read_timeout,
         ) {
-            tracing::error!("Failed to select port: {:?}", e);
-
-            return;
-        }
-        // 打开串口
-        let port = self.ports.open_port();
-        if let Err(e) = port {
-            tracing::error!("Failed to open port: {:?}", e);
-            window.open_alert_dialog(cx, move |alert, _, _cx| {
-                alert
-                    .title("打开串口失败")
-                    .description(e.to_string().title())
-                    .button_props(DialogButtonProps::default().ok_text("关闭"))
-                    .on_ok(|_, _window, _cx| true)
+            cx.emit(PortError {
+                message: e.to_string(),
             });
-            self.change_open_state(false, cx);
             return;
         }
-
-        let port = port.unwrap();
-
-        let port_handle = port.try_clone();
-
-        if port_handle.is_err() {
-            let message = format!("无法创建发送句柄：{}", port_handle.err().unwrap());
-            cx.emit(PortError { message });
+        let Some(builder) = self.ports.get_current_select_port().cloned() else {
             return;
-        }
+        };
+        self.opening = true;
+        cx.notify();
+        self.open_task = Some(cx.spawn(async move |entity, cx| {
+            let result = tokio::task::spawn_blocking(move || {
+                let port = builder.open().map_err(|e| e.to_string())?;
+                let writer = port.try_clone().map_err(|e| e.to_string())?;
+                Ok::<_, String>((port, writer))
+            })
+            .await;
+            let _ = entity.update(cx, |panel, cx| {
+                panel.opening = false;
+                match result {
+                    Ok(Ok((port, writer))) => panel.start_reader(port, writer, cx),
+                    Ok(Err(message)) => cx.emit(PortError { message }),
+                    Err(error) => cx.emit(PortError {
+                        message: error.to_string(),
+                    }),
+                }
+                cx.notify();
+            });
+        }));
+    }
 
-        let port_handle = port_handle.unwrap();
-
+    fn start_reader(
+        &mut self,
+        port: Box<dyn ww_protocol::SerialPort>,
+        port_handle: Box<dyn ww_protocol::SerialPort>,
+        cx: &mut Context<Self>,
+    ) {
         // 将端口句柄设置到 io_panel 中
         let _ = self.io_panel.update(cx, |io_panel, _cx| {
             io_panel.port_handle = Some(port_handle);
@@ -409,6 +480,18 @@ impl PortPanel {
                         });
                     }
                     PortMessage::Closed => {
+                        loop {
+                            let sending = port_panel.read_with(cx, |panel, cx| {
+                                panel
+                                    .io_panel
+                                    .upgrade()
+                                    .is_some_and(|io| !io.read(cx).last_send_completed)
+                            });
+                            if !sending.unwrap_or(false) {
+                                break;
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                        }
                         let _ = port_panel.update(cx, |this, cx| {
                             this.closing = false;
                             this.change_open_state(false, cx);
@@ -461,6 +544,9 @@ impl Render for PortPanel {
             .flex_col()
             .w_full()
             .gap_4()
+            .when_some(self.enumeration_error.clone(), |view, error| {
+                view.child(div().p_2().text_color(rgb(0xb42318)).child(error))
+            })
             .child(
                 // 串口选择信息和打开按钮
                 div().p_2().bg(white()).shadow_md().rounded_md().child(
@@ -520,7 +606,8 @@ impl Render for PortPanel {
                                     )
                                     .when_else(
                                         self.port_info_select.read(cx).selected_value().is_none()
-                                            || self.closing,
+                                            || self.closing
+                                            || self.opening,
                                         |this| this.disabled(true).cursor_not_allowed(),
                                         |this| this.disabled(false).cursor_pointer(),
                                     ),
@@ -580,7 +667,9 @@ impl Render for PortPanel {
                                                 |select| select.cursor_pointer(),
                                                 |select| select.cursor_not_allowed(),
                                             )
-                                            .disabled(self.open_state)
+                                            .disabled(
+                                                self.open_state || self.opening || self.closing,
+                                            )
                                             .placeholder("选择Com"),
                                     ),
                                 ),
@@ -607,7 +696,9 @@ impl Render for PortPanel {
                                                 |select| select.cursor_pointer(),
                                                 |select| select.cursor_not_allowed(),
                                             )
-                                            .disabled(self.open_state)
+                                            .disabled(
+                                                self.open_state || self.opening || self.closing,
+                                            )
                                             .placeholder("选择波特率"),
                                     ),
                                 ),
@@ -634,7 +725,9 @@ impl Render for PortPanel {
                                                 |select| select.cursor_pointer(),
                                                 |select| select.cursor_not_allowed(),
                                             )
-                                            .disabled(self.open_state)
+                                            .disabled(
+                                                self.open_state || self.opening || self.closing,
+                                            )
                                             .placeholder("选择校验位"),
                                     ),
                                 ),
@@ -661,7 +754,9 @@ impl Render for PortPanel {
                                                 |select| select.cursor_pointer(),
                                                 |select| select.cursor_not_allowed(),
                                             )
-                                            .disabled(self.open_state)
+                                            .disabled(
+                                                self.open_state || self.opening || self.closing,
+                                            )
                                             .placeholder("选择数据位个数"),
                                     ),
                                 ),
@@ -688,28 +783,30 @@ impl Render for PortPanel {
                                                 |select| select.cursor_pointer(),
                                                 |select| select.cursor_not_allowed(),
                                             )
-                                            .disabled(self.open_state)
+                                            .disabled(
+                                                self.open_state || self.opening || self.closing,
+                                            )
                                             .placeholder("选择停止位个数"),
+                                    ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .w_full()
+                                .items_center()
+                                .flex_wrap()
+                                .child(Label::new("流控：").w(px(LABLE_SIZE)).flex_shrink_0())
+                                .child(
+                                    div().flex_1().child(
+                                        Select::new(&self.flow_control_select)
+                                            .w_full()
+                                            .disabled(self.open_state || self.closing)
+                                            .placeholder("选择流控"),
                                     ),
                                 ),
                         ),
                 ),
-                // .child(
-                //     div().flex().w_full().items_center().child(
-                //         Label::new("数据流控：")
-                //             .w(px(100.))
-                //             .flex_shrink_0()
-                //             .flex_grow_0(),
-                //     ),
-                // )
-                // .child(
-                //     div().flex().w_full().items_center().child(
-                //         Label::new("流控信号：")
-                //             .w(px(100.))
-                //             .flex_shrink_0()
-                //             .flex_grow_0(),
-                //     ),
-                // ),
             )
     }
 }

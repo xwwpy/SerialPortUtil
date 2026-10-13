@@ -1,5 +1,5 @@
 use gpui::{Context, Entity, ParentElement, Render, SharedString, Styled, div, green};
-use gpui_component::{RopeExt, gray, label::Label};
+use gpui_component::{RopeExt, label::Label};
 
 use crate::{ui::io_panel::IoPanel, ui_config::get};
 
@@ -28,13 +28,15 @@ impl Render for Info {
     ) -> impl gpui::prelude::IntoElement {
         div()
             .flex()
-            .size_full()
-            .gap_2()
-            .bg(gray(300))
+            .w_full()
+            .flex_wrap()
+            .text_sm()
+            .px_4()
+            .gap_4()
             .rounded_md()
             .items_center()
-            .justify_evenly()
-            .child(self.auther_info.clone())
+            .justify_between()
+            .child(format!("Author: {}", self.auther_info))
             .child(
                 div()
                     .flex()
@@ -97,6 +99,6 @@ impl Render for Info {
                     )
                     .child(Label::new("个字节")),
             )
-            .child(self.author_email.clone())
+            .child(format!("Author Email: {}", self.author_email))
     }
 }

@@ -5,6 +5,54 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use ww_protocol::{DataBits, Parity, SerialPort, SerialPortInfo, SerialPortType, StopBits};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlowControlItem {
+    None,
+    Hardware,
+    Software,
+}
+
+impl SelectItem for FlowControlItem {
+    type Value = Self;
+    fn title(&self) -> gpui::SharedString {
+        match self {
+            Self::None => "无流控",
+            Self::Hardware => "RTS / CTS",
+            Self::Software => "XON / XOFF",
+        }
+        .into()
+    }
+    fn value(&self) -> &Self {
+        self
+    }
+}
+
+impl From<FlowControlItem> for ww_protocol::FlowControl {
+    fn from(item: FlowControlItem) -> Self {
+        match item {
+            FlowControlItem::None => Self::None,
+            FlowControlItem::Hardware => Self::Hardware,
+            FlowControlItem::Software => Self::Software,
+        }
+    }
+}
+
+#[cfg(test)]
+mod flow_tests {
+    use super::*;
+    #[test]
+    fn flow_modes_map_to_native_settings() {
+        assert_eq!(
+            ww_protocol::FlowControl::from(FlowControlItem::Hardware),
+            ww_protocol::FlowControl::Hardware
+        );
+        assert_eq!(
+            ww_protocol::FlowControl::from(FlowControlItem::Software),
+            ww_protocol::FlowControl::Software
+        );
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PortInfoItem {
     port_name: String,

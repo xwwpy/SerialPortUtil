@@ -1,5 +1,7 @@
-#[derive(Debug, Clone, PartialEq)]
-pub struct UpdatePortsInfo;
+#[derive(Debug, Clone)]
+pub struct UpdatePortsInfo {
+    pub ports: Result<Vec<ww_protocol::SerialPortInfo>, String>,
+}
 
 pub struct ReceivedData {
     pub data: Vec<u8>,

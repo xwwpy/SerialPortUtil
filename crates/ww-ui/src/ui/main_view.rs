@@ -45,7 +45,7 @@ impl MainView {
             let update_info_sub = cx.subscribe(
                 &main_view_entity,
                 |this: &mut PortPanel, _main_view, _event: &UpdatePortsInfo, cx| {
-                    this.update_info(cx);
+                    this.update_info(_event, cx);
                 },
             );
             PortPanel::new(io_panel_weak, window, cx, update_info_sub)
@@ -78,6 +78,7 @@ impl MainView {
                             .map(|encoding| encoding.new_decoder());
                     }
                     if !open_state.open_state {
+                        this.stop_timer(cx);
                         this.send_cancel
                             .store(true, std::sync::atomic::Ordering::Release);
                         drop(this.port_handle.take());
@@ -125,6 +126,7 @@ impl Render for MainView {
         let narrow = window.viewport_size().width < px(900.);
         let connected = self.port_panel.read(cx).open_state;
         let closing = self.port_panel.read(cx).closing;
+        let opening = self.port_panel.read(cx).opening;
         div()
             .size_full()
             .flex()
@@ -161,7 +163,9 @@ impl Render for MainView {
                             } else {
                                 rgb(0x64748b)
                             })
-                            .child(if closing {
+                            .child(if opening {
+                                "正在连接"
+                            } else if closing {
                                 "正在关闭连接"
                             } else if connected {
                                 "● 串口已连接"
@@ -172,7 +176,7 @@ impl Render for MainView {
                     .child(
                         Button::new("quick-connect")
                             .label(if connected { "断开" } else { "连接" })
-                            .disabled(closing)
+                            .disabled(closing || opening)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.port_panel.update(cx, |panel, cx| {
                                     if panel.open_state {
@@ -388,8 +392,12 @@ async fn update_ports_info(main_view_entity: WeakEntity<MainView>, cx: &mut Asyn
         .get_port_panel_config()
         .get_port_update_interval();
     loop {
+        let ports = match tokio::task::spawn_blocking(ww_protocol::get_ports).await {
+            Ok(result) => result.map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
         let emit_res = main_view_entity.update(cx, move |_, cx| {
-            cx.emit(UpdatePortsInfo {});
+            cx.emit(UpdatePortsInfo { ports });
         });
         if emit_res.is_err() {
             break;

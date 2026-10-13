@@ -1,6 +1,8 @@
 use crate::common::error::ProtocolError;
 
-use serialport::{DataBits, Parity, SerialPort, SerialPortBuilder, SerialPortInfo, StopBits};
+use serialport::{
+    DataBits, FlowControl, Parity, SerialPort, SerialPortBuilder, SerialPortInfo, StopBits,
+};
 
 #[derive(Debug, Default)]
 pub struct Ports {
@@ -35,6 +37,7 @@ impl Ports {
         parity: impl Into<Parity>,
         databits: impl Into<DataBits>,
         stopbits: impl Into<StopBits>,
+        flow_control: impl Into<FlowControl>,
         open_port_timeout: u64,
     ) -> Result<(), ProtocolError> {
         if self.ports == None {
@@ -56,6 +59,7 @@ impl Ports {
             .parity(parity.into())
             .data_bits(databits.into())
             .stop_bits(stopbits.into())
+            .flow_control(flow_control.into())
             .timeout(std::time::Duration::from_millis(open_port_timeout));
 
         self.current_select_port = Some(current_port);

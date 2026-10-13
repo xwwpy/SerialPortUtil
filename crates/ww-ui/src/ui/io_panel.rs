@@ -1,3 +1,8 @@
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use encoding_rs::{Decoder, Encoder};
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -7,10 +12,9 @@ use gpui::{
 };
 use gpui_component::button::Button;
 use gpui_component::checkbox::Checkbox;
-use gpui_component::dialog::DialogButtonProps;
 use gpui_component::input::{Copy, Input, InputState, RopeExt, SelectAll};
 use gpui_component::label::Label;
-use gpui_component::{Disableable, StyledExt, WindowExt, gray};
+use gpui_component::{Disableable, StyledExt, gray};
 use ww_protocol::SerialPort;
 
 use crate::model::config_panel::{AutoAppendItem, Supported};
@@ -35,6 +39,9 @@ pub struct IoPanel {
     whether_auto_scroll_to_bottom: bool,
     whether_add_timestamp: bool,
     pub port_open_state: bool,
+    pub session_id: u64,
+    pub send_cancel: Arc<AtomicBool>,
+    pub last_error: Option<String>,
     pub encoding: Supported,
 
     pub encoder: Option<Encoder>,
@@ -77,6 +84,9 @@ impl Render for IoPanel {
             .on_action(cx.listener(Self::clear_port_input_text))
             .on_action(cx.listener(Self::clear_user_input_text))
             .on_action(cx.listener(Self::clear_user_input_show_text))
+            .when_some(self.last_error.clone(), |view, message| {
+                view.child(div().p_2().text_color(rgb(0xb42318)).child(message))
+            })
             // output view
             .child(
                 div()
@@ -316,137 +326,113 @@ pub fn submit_user_input(
     window: &mut Window,
     cx: &mut Context<IoPanel>,
 ) {
-    if !this.last_send_completed {
-        window.open_alert_dialog(cx, move |alert, _, _cx| {
-            alert
-                .title("发送的过于频繁...")
-                .description("请等待上次发送完成后再发送")
-                .button_props(DialogButtonProps::default().ok_text("关闭"))
-                .on_ok(|_, _window, _cx| true)
-        });
-        return;
-    }
+    this.send(window, cx);
+}
 
-    this.last_send_completed = false;
-
-    this.focus_user_input(window, cx);
-
-    let user_input = this.user_input_state.read(cx).value();
-
-    let mut content_to_show = user_input.to_string();
-
-    match this.auto_tx_append {
-        AutoAppendItem::None => {}
-        AutoAppendItem::Lf => {
-            content_to_show.push('\n');
+impl IoPanel {
+    pub fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.port_open_state || !self.last_send_completed {
+            return;
         }
-        AutoAppendItem::Cr => {
-            content_to_show.push('\r');
-        }
-        AutoAppendItem::CrLf => {
-            content_to_show.push_str("\r\n");
-        }
-        AutoAppendItem::LfCr => {
-            content_to_show.push_str("\n\r");
-        }
-    };
-
-    let current_encoding = this.encoding;
-
-    let content_to_send = content_to_show.clone();
-
-    let mut port_handle = this.port_handle.take();
-
-    cx.spawn(async move |io_panel, cx| {
-        let datas = IoPanel::resolve_user_input_data(current_encoding, &content_to_send);
-
-        let total_bytes = datas.len();
-
-        let chunk_size = 64;
-
-        let mut send_bytes = 0;
-        let mut cur_circle_transmit_bytes = 0;
-
-        if let Some(ref mut port_handle) = port_handle {
-            while send_bytes < total_bytes {
-                // 检查端口是否已关闭
-                if let Some(io_panel) = io_panel.upgrade() {
-                    let open_state = io_panel.read_with(cx, |io_panel, _cx| {
-                        return io_panel.port_open_state;
-                    });
-
-                    if !open_state {
-                        break;
-                    }
-                }
-
-                if send_bytes + chunk_size > total_bytes {
-                    let chunk = &datas[send_bytes..];
-                    let res = port_handle.write(chunk);
-                    if res.is_ok() {
-                        cur_circle_transmit_bytes += res.unwrap() as u64;
-                        send_bytes += cur_circle_transmit_bytes as usize;
-                    } else {
-                        tracing::error!("Failed to write chunk: {:?}", res);
-                        break;
-                    }
-                } else {
-                    let chunk = &datas[send_bytes..send_bytes + chunk_size];
-                    let res = port_handle.write(chunk);
-                    if res.is_ok() {
-                        cur_circle_transmit_bytes += res.unwrap() as u64;
-                        send_bytes += cur_circle_transmit_bytes as usize;
-                    } else {
-                        tracing::error!("Failed to write chunk: {:?}", res);
-                        break;
-                    }
-                }
-                let _ = io_panel.update(cx, |io_panel, _cx| {
-                    io_panel.user_transmit_bytes += cur_circle_transmit_bytes;
-                });
-            }
-        }
-
-        tracing::info!("发送了{}字节", send_bytes);
-
-        let _ = io_panel.update(cx, move |panel, cx| {
-            if !panel.port_open_state {
-                drop(port_handle);
+        let input = self.user_input_state.read(cx).value().to_string();
+        let mut bytes = match Self::resolve_user_input_data(self.encoding, &input) {
+            Ok(bytes) => bytes,
+            Err(message) => {
+                self.last_error = Some(message);
+                cx.notify();
                 return;
             }
-            panel.last_send_completed = true;
-            panel.port_handle = port_handle;
+        };
+        let suffix = match self.auto_tx_append {
+            AutoAppendItem::None => "",
+            AutoAppendItem::Lf => "\n",
+            AutoAppendItem::Cr => "\r",
+            AutoAppendItem::CrLf => "\r\n",
+            AutoAppendItem::LfCr => "\n\r",
+        };
+        bytes.extend_from_slice(suffix.as_bytes());
+        if bytes.is_empty() {
+            self.last_error = Some("发送内容不能为空".into());
             cx.notify();
-        });
-    })
-    .detach();
-
-    if this.whether_add_timestamp {
-        if this.simple_time_show {
-            content_to_show = format!(
-                "{}{}",
-                jiff::Zoned::now().strftime("%H:%M:%S%.3f: "),
-                content_to_show
-            );
-        } else {
-            content_to_show = format!(
-                "{}{}",
-                jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S%.3f: "),
-                content_to_show
-            );
+            return;
         }
+        let Some(mut handle) = self.port_handle.take() else {
+            return;
+        };
+        self.focus_user_input(window, cx);
+        self.last_send_completed = false;
+        self.last_error = None;
+        let session_id = self.session_id;
+        let cancel = self.send_cancel.clone();
+        let shown = if self.encoding == Supported::Hex {
+            bytes
+                .iter()
+                .map(|b| format!("{b:02X}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        } else {
+            format!("{input}{suffix}")
+        };
+        let timestamp = if self.whether_add_timestamp {
+            jiff::Zoned::now()
+                .strftime(if self.simple_time_show {
+                    "%H:%M:%S%.3f "
+                } else {
+                    "%Y-%m-%d %H:%M:%S%.3f "
+                })
+                .to_string()
+        } else {
+            String::new()
+        };
+        cx.spawn(async move |entity, cx| {
+            let result = tokio::task::spawn_blocking(move || {
+                let result = ww_protocol::transfer::write_bytes(&mut handle, &bytes, || {
+                    cancel.load(Ordering::Acquire)
+                });
+                (handle, result)
+            })
+            .await;
+            let _ = entity.update(cx, move |panel, cx| {
+                if panel.session_id != session_id {
+                    return;
+                }
+                panel.last_send_completed = true;
+                match result {
+                    Ok((handle, result)) => {
+                        panel.user_transmit_bytes += result.bytes_written as u64;
+                        if panel.port_open_state {
+                            panel.port_handle = Some(handle);
+                        }
+                        let status = match result.error {
+                            Some(error) => {
+                                panel.last_error = Some(format!(
+                                    "发送失败（已发送 {} 字节）：{error}",
+                                    result.bytes_written
+                                ));
+                                format!(" [失败，已发送 {} 字节]", result.bytes_written)
+                            }
+                            None => String::new(),
+                        };
+                        let log = format!("{timestamp}{shown}{status}\n");
+                        Self::insert_text(
+                            log,
+                            cx,
+                            panel.user_input_show_state.clone(),
+                            panel.whether_auto_scroll_to_bottom,
+                            panel.window,
+                            panel.user_input_max_lines,
+                        );
+                    }
+                    Err(error) => {
+                        panel.last_error = Some(format!("发送任务失败：{error}"));
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
     }
-
-    // 窗口已经在更新栈中，不能再使用window_handle.update
-    IoPanel::insert_text_without_window_handle(
-        content_to_show,
-        cx,
-        this.user_input_show_state.clone(),
-        this.whether_auto_scroll_to_bottom,
-        window,
-        this.user_input_max_lines,
-    );
-    cx.notify();
 }
 
 impl IoPanel {
@@ -508,6 +494,9 @@ impl IoPanel {
             _receive_data_subscription: None,
             _open_state_observer_subscription: None,
             port_open_state: false,
+            session_id: 0,
+            send_cancel: Arc::new(AtomicBool::new(false)),
+            last_error: None,
             _encoding_changed_subscription: None,
             _decoding_changed_subscription: None,
             _auto_tx_append_observer_subscription: None,
@@ -654,31 +643,17 @@ impl IoPanel {
     ///
     /// - 非 Hex 编码：直接按对应编码把文本编码成字节。
     /// - Hex 编码：输入是十六进制字节串，空格等空白字符仅作为分隔符，不参与解析。
-    /// TODO 将解析好的数据发送给串口
-    pub fn resolve_user_input_data(encoding: Supported, datas: &str) -> Vec<u8> {
+    pub fn resolve_user_input_data(encoding: Supported, data: &str) -> Result<Vec<u8>, String> {
         match encoding.encoding() {
-            Some(enc) => enc.encode(datas).0.into_owned(),
-            None => {
-                let mut out = Vec::new();
-                let mut high: Option<u8> = None;
-                for c in datas.chars() {
-                    // 空白字符作为分隔符，直接跳过
-                    if c.is_whitespace() {
-                        continue;
-                    }
-                    if let Some(n) = c.to_digit(16) {
-                        match high.take() {
-                            Some(h) => out.push((h << 4) | n as u8),
-                            None => high = Some(n as u8),
-                        }
-                    }
-                    // 其他非十六进制字符忽略
+            Some(enc) => {
+                let (bytes, _, errors) = enc.encode(data);
+                if errors {
+                    Err("发送文本包含当前编码无法表示的字符".into())
+                } else {
+                    Ok(bytes.into_owned())
                 }
-                if let Some(h) = high {
-                    out.push(h << 4);
-                }
-                out
             }
+            None => ww_protocol::transfer::parse_hex(data),
         }
     }
 
@@ -695,6 +670,13 @@ impl IoPanel {
             if total_lines > max_lines {
                 let excess = total_lines - max_lines;
                 Some(text.line_start_offset(excess))
+            } else if text.len() > 1_048_576 {
+                let value = state.value();
+                let mut offset = value.len().saturating_sub(1_048_576);
+                while !value.is_char_boundary(offset) {
+                    offset += 1;
+                }
+                Some(offset)
             } else {
                 None
             }
@@ -737,32 +719,10 @@ impl IoPanel {
             });
         });
     }
+}
 
-    fn insert_text_without_window_handle(
-        text: String,
-        cx: &mut Context<Self>,
-        target_state: Entity<InputState>,
-        whether_auto_scroll_to_bottom: bool,
-        window: &mut Window,
-        max_lines: usize,
-    ) {
-        target_state.update(cx, |state, cx| {
-            let saved_scroll = state.scroll_offset();
-
-            state.insert(text, window, cx);
-            Self::trim_to_max_lines(state, window, cx, max_lines);
-
-            let len = state.text().len();
-
-            // 修复原来的 set_cursor_position 一直主动聚焦自身的bug
-            state.set_selected_range(len..len, cx);
-
-            if !whether_auto_scroll_to_bottom {
-                // 裁剪会把光标移到开头，这里恢复裁剪前的滚动位置；
-                // 光标已移回末尾，避免下次 insert 插到开头。
-                state.set_scroll_offset(saved_scroll, cx);
-            }
-            cx.notify();
-        });
+impl Drop for IoPanel {
+    fn drop(&mut self) {
+        self.send_cancel.store(true, Ordering::Release);
     }
 }

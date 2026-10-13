@@ -2,7 +2,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 
 use gpui_component::select::SelectItem;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::Sender;
 use ww_protocol::{DataBits, Parity, SerialPort, SerialPortInfo, SerialPortType, StopBits};
 
 #[derive(Debug, Clone)]
@@ -187,11 +187,12 @@ impl SelectItem for StopBitsItem {
 pub enum PortMessage {
     Data(Vec<u8>),
     Error(String),
+    Closed,
 }
 
 pub fn port_read_loop(
     mut port_handle: Box<dyn SerialPort>,
-    tx: UnboundedSender<PortMessage>,
+    tx: Sender<PortMessage>,
     cancel_flag: Arc<AtomicBool>,
 ) {
     let mut buf = [0u8; 1024];
@@ -202,18 +203,21 @@ pub fn port_read_loop(
 
         match port_handle.read(&mut buf) {
             Ok(n) if n > 0 => {
-                if tx.send(PortMessage::Data(buf[..n].to_vec())).is_err() {
+                if tx
+                    .blocking_send(PortMessage::Data(buf[..n].to_vec()))
+                    .is_err()
+                {
                     break;
                 }
             }
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
             Err(e) => {
-                let _ = tx.send(PortMessage::Error(e.to_string()));
+                let _ = tx.blocking_send(PortMessage::Error(e.to_string()));
                 break;
             }
         }
     }
     drop(port_handle);
-    cancel_flag.store(false, std::sync::atomic::Ordering::Relaxed);
+    let _ = tx.blocking_send(PortMessage::Closed);
 }

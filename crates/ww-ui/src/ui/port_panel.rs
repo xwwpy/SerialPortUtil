@@ -28,6 +28,7 @@ pub struct PortPanel {
     io_panel: WeakEntity<IoPanel>,
     port_open_focus_handle: FocusHandle,
     port_config_focus_handle: FocusHandle,
+    pub closing: bool,
     pub open_state: bool, // 当前串口是否开启
 
     receive_task: Option<Task<()>>,
@@ -74,6 +75,7 @@ impl PortPanel {
             ports: Ports::new(),
             port_open_focus_handle: cx.focus_handle(),
             port_config_focus_handle: cx.focus_handle(),
+            closing: false,
             open_state: false,
             receive_task: None,
             update_info_sub: Some(update_info_sub),
@@ -258,7 +260,6 @@ impl PortPanel {
             return;
         }
         // 打开串口
-        self.change_open_state(true, cx);
         let port = self.ports.open_port();
         if let Err(e) = port {
             tracing::error!("Failed to open port: {:?}", e);
@@ -278,7 +279,8 @@ impl PortPanel {
         let port_handle = port.try_clone();
 
         if port_handle.is_err() {
-            tracing::error!("Failed to clone port: {:?}", port_handle);
+            let message = format!("无法创建发送句柄：{}", port_handle.err().unwrap());
+            cx.emit(PortError { message });
             return;
         }
 
@@ -289,8 +291,10 @@ impl PortPanel {
             io_panel.port_handle = Some(port_handle);
         });
 
-        // 用 channel 把后台线程读取到的数据发回主线程
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PortMessage>();
+        self.cancel_flag = Arc::new(AtomicBool::new(false));
+        self.change_open_state(true, cx);
+        // 有界队列通过背压限制内存，关闭时保留消费者直到后台释放串口。
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<PortMessage>(128);
 
         // 在独立线程执行阻塞读取，避免卡住 UI 主线程
         let cancel_flag_cloned = self.cancel_flag.clone();
@@ -302,14 +306,23 @@ impl PortPanel {
                 match message {
                     PortMessage::Data(data) => {
                         let _ = port_panel.update(cx, |_this, cx| {
-                            cx.emit(ReceivedData { data });
+                            if _this.open_state {
+                                cx.emit(ReceivedData { data });
+                            }
                         });
                     }
                     PortMessage::Error(msg) => {
                         let _ = port_panel.update(cx, |this, cx| {
+                            this.closing = true;
                             this.change_open_state(false, cx);
                             cx.emit(PortError { message: msg });
                             cx.notify();
+                        });
+                    }
+                    PortMessage::Closed => {
+                        let _ = port_panel.update(cx, |this, cx| {
+                            this.closing = false;
+                            this.change_open_state(false, cx);
                         });
                         break;
                     }
@@ -324,15 +337,9 @@ impl PortPanel {
     }
 
     pub fn close_port(&mut self, cx: &mut Context<Self>) {
-        if self.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
-            return;
-        }
+        self.closing = true;
         self.cancel_flag
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        self.receive_task.take();
-        // 等待关闭串口
-        while self.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {}
-
+            .store(true, std::sync::atomic::Ordering::Release);
         self.change_open_state(false, cx);
         cx.notify();
     }
@@ -423,7 +430,8 @@ impl Render for PortPanel {
                                             .when(self.open_state, |this| this.bg(green())),
                                     )
                                     .when_else(
-                                        self.port_info_select.read(cx).selected_value().is_none(),
+                                        self.port_info_select.read(cx).selected_value().is_none()
+                                            || self.closing,
                                         |this| this.disabled(true).cursor_not_allowed(),
                                         |this| this.disabled(false).cursor_pointer(),
                                     ),
@@ -614,5 +622,12 @@ impl Render for PortPanel {
                 //     ),
                 // ),
             )
+    }
+}
+
+impl Drop for PortPanel {
+    fn drop(&mut self) {
+        self.cancel_flag
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 }

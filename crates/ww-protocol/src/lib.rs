@@ -1,5 +1,6 @@
 pub mod common;
 pub mod model;
+pub mod transfer;
 
 pub use serialport::SerialPort;
 pub use serialport::SerialPortInfo;

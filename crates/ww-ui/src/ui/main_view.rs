@@ -61,7 +61,20 @@ impl MainView {
                 &port_panel,
                 |this, _port_panel, open_state: &OpenStateChanged, cx| {
                     this.port_open_state = open_state.open_state;
+                    if open_state.open_state {
+                        this.session_id = this.session_id.wrapping_add(1);
+                        this.send_cancel =
+                            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                        this.last_send_completed = true;
+                        this.last_error = None;
+                        this.decoder = this
+                            .decoding
+                            .encoding()
+                            .map(|encoding| encoding.new_decoder());
+                    }
                     if !open_state.open_state {
+                        this.send_cancel
+                            .store(true, std::sync::atomic::Ordering::Release);
                         drop(this.port_handle.take());
                     }
                     cx.notify();
@@ -219,8 +232,8 @@ async fn update_ports_info(main_view_entity: WeakEntity<MainView>, cx: &mut Asyn
         let emit_res = main_view_entity.update(cx, move |_, cx| {
             cx.emit(UpdatePortsInfo {});
         });
-        if let Err(e) = emit_res {
-            tracing::error!("更新端口信息失败：{e}");
+        if emit_res.is_err() {
+            break;
         }
         tokio::time::sleep(Duration::from_millis(interval)).await;
     }
